@@ -10,7 +10,6 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ayush.netpulse.NetPulseApp
-import com.ayush.netpulse.ui.dashboard.DashboardScreen
 import com.ayush.netpulse.ui.dashboard.DashboardViewModel
 import com.ayush.netpulse.ui.theme.NetPulseTheme
 import com.ayush.netpulse.util.NetworkUtils
@@ -37,7 +36,7 @@ class MainActivity : ComponentActivity() {
             NetPulseTheme {
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-                DashboardScreen(
+                MainScreen(
                     uiState = uiState,
                     onToggleMonitoring = { viewModel.toggleMonitoring() },
                     onToggleBackgroundService = {
@@ -60,7 +59,8 @@ class MainActivity : ComponentActivity() {
                     onRequestBatteryOptimization = {
                         startActivity(NetworkUtils.createIgnoreBatteryOptimizationIntent(this))
                     },
-                    onRefreshUsage = { viewModel.loadDailyDataUsage() }
+                    onRefreshUsage = { viewModel.loadDailyDataUsage() },
+                    onClearLogs = { viewModel.clearLogs() }
                 )
             }
         }

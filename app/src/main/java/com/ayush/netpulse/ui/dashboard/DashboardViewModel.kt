@@ -249,6 +249,12 @@ class DashboardViewModel(
         }
     }
 
+    fun clearLogs() {
+        viewModelScope.launch {
+            repository.clearSpeedRecords()
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopLocalMonitoring()

@@ -354,4 +354,13 @@ class NetworkRepository(
     fun getRecentDailyUsage(limit: Int = 7): Flow<List<DailyUsageEntity>> {
         return dailyUsageDao.getRecentDailyUsage(limit)
     }
+
+    /**
+     * Clears recorded speed samples from Room
+     */
+    suspend fun clearSpeedRecords() {
+        withContext(Dispatchers.IO) {
+            speedRecordDao.clearAllRecords()
+        }
+    }
 }

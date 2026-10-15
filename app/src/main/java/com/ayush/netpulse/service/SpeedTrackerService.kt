@@ -192,20 +192,19 @@ class SpeedTrackerService : Service() {
         )
 
         val speedText = "↓ ${speed.formattedDownload}   ↑ ${speed.formattedUpload}"
-        val subText = networkType.displayName
+        val connectionText = networkType.displayName
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("NetPulse • Live Speed ($subText)")
-            .setContentText(speedText)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$speedText\nActive Connection: $subText"))
+            .setContentTitle(speedText)
+            .setContentText(connectionText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setContentIntent(pendingOpenApp)
-            .addAction(0, "Stop Monitoring", pendingStop)
+            .addAction(0, "Stop", pendingStop)
             .build()
     }
 

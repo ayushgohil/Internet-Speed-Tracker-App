@@ -1,9 +1,9 @@
 package com.ayush.netpulse.ui.dashboard
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,21 +16,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalWifi4Bar
 import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Speed
@@ -38,12 +37,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -60,8 +57,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ayush.netpulse.data.local.DailyUsageEntity
-import com.ayush.netpulse.data.local.SpeedRecordEntity
 import com.ayush.netpulse.data.model.DiagnosticsInfo
 import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.ui.theme.Amber500
@@ -71,139 +66,107 @@ import com.ayush.netpulse.ui.theme.DarkBackground
 import com.ayush.netpulse.ui.theme.DarkCardBorder
 import com.ayush.netpulse.ui.theme.DarkSurface
 import com.ayush.netpulse.ui.theme.Emerald400
-import com.ayush.netpulse.ui.theme.Emerald500
 import com.ayush.netpulse.ui.theme.Rose500
 import com.ayush.netpulse.ui.theme.Slate400
 import com.ayush.netpulse.ui.theme.Slate600
 import com.ayush.netpulse.ui.theme.Slate700
 import com.ayush.netpulse.ui.theme.Slate800
 import com.ayush.netpulse.ui.theme.Slate900
-import com.ayush.netpulse.ui.theme.Violet500
-import com.ayush.netpulse.util.NetworkUtils
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
-fun DashboardScreen(
+fun DashboardTab(
     uiState: DashboardUiState,
     onToggleMonitoring: () -> Unit,
     onToggleBackgroundService: () -> Unit,
-    onRequestUsageAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRequestBatteryOptimization: () -> Unit,
-    onRefreshUsage: () -> Unit,
+    onNavigateToUsage: () -> Unit,
+    onNavigateToLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = DarkBackground
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Header
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Header
+        item {
+            Spacer(modifier = Modifier.height(10.dp))
+            HeaderSection(
+                isMonitoring = uiState.isMonitoringActive,
+                isBackgroundActive = uiState.isBackgroundServiceRunning,
+                onToggle = onToggleMonitoring
+            )
+        }
+
+        // Notification Permission Prompt (Android 13+)
+        if (!uiState.hasNotificationPermission) {
             item {
-                Spacer(modifier = Modifier.height(10.dp))
-                HeaderSection(
-                    isMonitoring = uiState.isMonitoringActive,
-                    isBackgroundActive = uiState.isBackgroundServiceRunning,
-                    onToggle = onToggleMonitoring
+                NotificationPermissionCard(onRequestPermission = onRequestNotificationPermission)
+            }
+        }
+
+        // Status Bar Persistent Service Switch
+        item {
+            BackgroundServiceCard(
+                isRunning = uiState.isBackgroundServiceRunning,
+                onToggle = onToggleBackgroundService
+            )
+        }
+
+        // Battery Optimization Warning (if not whitelisted)
+        if (!uiState.isBatteryOptimizationIgnored && uiState.isBackgroundServiceRunning) {
+            item {
+                BatteryOptimizationCard(onConfigureBattery = onRequestBatteryOptimization)
+            }
+        }
+
+        // Connection Status Card
+        item {
+            NetworkStatusCard(networkType = uiState.networkType)
+        }
+
+        // Live Speed Hero Card
+        item {
+            LiveSpeedHeroCard(uiState = uiState)
+        }
+
+        // Quick Summary Cards (Links to Usage and Logs)
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                QuickNavCard(
+                    title = "Today's Usage",
+                    subtitle = uiState.dailyUsage.formattedTotal,
+                    detail = "Tap to view breakdown",
+                    icon = Icons.Default.DataUsage,
+                    accentColor = Cyan400,
+                    onClick = onNavigateToUsage,
+                    modifier = Modifier.weight(1f)
+                )
+
+                QuickNavCard(
+                    title = "Speed Logs",
+                    subtitle = "${uiState.recentRecords.size} samples",
+                    detail = "Tap to view history",
+                    icon = Icons.Default.History,
+                    accentColor = Blue400,
+                    onClick = onNavigateToLogs,
+                    modifier = Modifier.weight(1f)
                 )
             }
+        }
 
-            // Notification Permission Banner (Android 13+)
-            if (!uiState.hasNotificationPermission) {
-                item {
-                    NotificationPermissionCard(onRequestPermission = onRequestNotificationPermission)
-                }
-            }
+        // Diagnostics Section
+        item {
+            DiagnosticsSection(diagnostics = uiState.diagnosticsInfo)
+        }
 
-            // Background Monitoring Foreground Service Control Card
-            item {
-                BackgroundServiceCard(
-                    isRunning = uiState.isBackgroundServiceRunning,
-                    onToggle = onToggleBackgroundService
-                )
-            }
-
-            // Battery Optimization Advisory Card (if not whitelisted)
-            if (!uiState.isBatteryOptimizationIgnored && uiState.isBackgroundServiceRunning) {
-                item {
-                    BatteryOptimizationCard(onConfigureBattery = onRequestBatteryOptimization)
-                }
-            }
-
-            // Network Connection Status Badge
-            item {
-                NetworkStatusCard(networkType = uiState.networkType)
-            }
-
-            // Real-Time Speed Hero Card
-            item {
-                LiveSpeedHeroCard(
-                    uiState = uiState
-                )
-            }
-
-            // Data Usage Card (NetworkStatsManager)
-            item {
-                DataUsageSection(
-                    uiState = uiState,
-                    onRequestUsageAccess = onRequestUsageAccess,
-                    onRefreshUsage = onRefreshUsage
-                )
-            }
-
-            // Daily Usage History from Room (Multi-day recovery)
-            if (uiState.recentDailyRecords.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "Daily Usage History (Room)",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                items(uiState.recentDailyRecords) { dailyRecord ->
-                    DailyUsageRow(dailyUsage = dailyRecord)
-                }
-            }
-
-            // Monitoring Diagnostics Section
-            item {
-                DiagnosticsSection(diagnostics = uiState.diagnosticsInfo)
-            }
-
-            // Recent Room Speed Records Header
-            item {
-                Text(
-                    text = "Recent Live Samples (Room)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            // Empty state or Room records
-            if (uiState.recentRecords.isEmpty()) {
-                item {
-                    EmptyHistoryCard(isMonitoring = uiState.isMonitoringActive)
-                }
-            } else {
-                items(uiState.recentRecords) { record ->
-                    SpeedRecordRow(record = record)
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-            }
+        item {
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -241,8 +204,8 @@ private fun HeaderSection(
             }
             Text(
                 text = when {
-                    isBackgroundActive -> "Foreground Service Active • Notification ON"
-                    isMonitoring -> "Live Screen Monitor Active"
+                    isBackgroundActive -> "Status Bar Meter ON • Monitoring Active"
+                    isMonitoring -> "Screen Monitor Active"
                     else -> "Monitoring Paused"
                 },
                 style = MaterialTheme.typography.bodyMedium,
@@ -309,9 +272,9 @@ private fun BackgroundServiceCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = if (isRunning)
-                        "Monitors speed when app is minimized or screen is locked."
+                        "Shows continuous upload & download speeds in notification."
                     else
-                        "Enable to keep speed meter running in status bar notification.",
+                        "Enable to show live speed meter in Android status bar.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Slate400,
                     fontSize = 12.sp
@@ -361,7 +324,7 @@ private fun NotificationPermissionCard(onRequestPermission: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Android 13+ requires notification permission to show continuous download and upload speeds in the status bar.",
+                text = "Android 13+ requires notification permission to display ongoing network speeds in the status bar.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Slate400,
                 fontSize = 12.sp
@@ -512,18 +475,17 @@ private fun LiveSpeedHeroCard(
                 )
                 Text(
                     text = when {
-                        uiState.isBackgroundServiceRunning -> "Foreground Service active"
-                        uiState.isMonitoringActive -> "TrafficStats active"
+                        uiState.isBackgroundServiceRunning -> "Status Bar active"
+                        uiState.isMonitoringActive -> "Active"
                         else -> "Paused"
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (uiState.isBackgroundServiceRunning) Emerald400 else Slate400
+                    color = if (uiState.isBackgroundServiceRunning || uiState.isMonitoringActive) Emerald400 else Slate400
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Two Columns: Download and Upload
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -610,251 +572,60 @@ private fun SpeedColumn(
 }
 
 @Composable
-private fun DataUsageSection(
-    uiState: DashboardUiState,
-    onRequestUsageAccess: () -> Unit,
-    onRefreshUsage: () -> Unit
+private fun QuickNavCard(
+    title: String,
+    subtitle: String,
+    detail: String,
+    icon: ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp)),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(20.dp)
+    Surface(
+        modifier = modifier
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp))
+            .clickable { onClick() },
+        color = DarkSurface,
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp)
-        ) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Today's Data Usage",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "NetworkStatsManager Summary",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Slate400
-                    )
-                }
-
-                if (uiState.isLoadingUsage) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = Cyan400
-                    )
-                } else {
-                    IconButton(
-                        onClick = onRefreshUsage,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh Usage",
-                            tint = Cyan400,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            if (!uiState.hasUsageAccessPermission) {
-                // Permission Request Banner
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Slate800,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = Amber500,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Usage Access Permission Needed",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White,
-                                fontSize = 14.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Android requires Usage Access to query system mobile and Wi-Fi data statistics.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Slate400
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = onRequestUsageAccess,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Cyan400,
-                                contentColor = DarkBackground
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Grant Permission in Settings", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            } else {
-                // Usage Numbers
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    UsageMetricCard(
-                        title = "Mobile Data",
-                        value = uiState.dailyUsage.formattedMobile,
-                        icon = Icons.Default.CellTower,
-                        accentColor = Blue400,
-                        modifier = Modifier.weight(1f)
-                    )
-                    UsageMetricCard(
-                        title = "Wi-Fi Data",
-                        value = uiState.dailyUsage.formattedWifi,
-                        icon = Icons.Default.SignalWifi4Bar,
-                        accentColor = Cyan400,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Slate800, RoundedCornerShape(12.dp)),
-                    color = Slate900.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Combined Today",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Slate400
-                        )
-                        Text(
-                            text = uiState.dailyUsage.formattedTotal,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun UsageMetricCard(
-    title: String,
-    value: String,
-    icon: ImageVector,
-    accentColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .border(1.dp, Slate800, RoundedCornerShape(14.dp)),
-        color = Slate900.copy(alpha = 0.6f),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Slate400
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = Slate600,
+                    modifier = Modifier.size(14.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = value,
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = Slate400
+            )
+            Text(
+                text = subtitle,
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
-        }
-    }
-}
-
-@Composable
-private fun DailyUsageRow(dailyUsage: DailyUsageEntity) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Slate800, RoundedCornerShape(12.dp)),
-        color = DarkSurface,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = dailyUsage.date,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Total: ${dailyUsage.formattedTotal}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Cyan400
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Cellular: ${dailyUsage.formattedMobile}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Blue400,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "Wi-Fi: ${dailyUsage.formattedWifi}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Emerald400,
-                        fontSize = 12.sp
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor,
+                fontSize = 11.sp
+            )
         }
     }
 }
@@ -875,7 +646,7 @@ private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "System & Monitoring Diagnostics",
+                    text = "System Diagnostics",
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold
@@ -888,78 +659,61 @@ private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Service Process Status
             DiagnosticItemRow(
-                label = "Foreground Service",
+                label = "Service Process",
                 value = if (diagnostics.isForegroundServiceRunning) "Running" else "Stopped",
                 valueColor = if (diagnostics.isForegroundServiceRunning) Emerald400 else Slate400
             )
 
-            // Stale Process State Check
             if (diagnostics.isServiceStatePotentiallyStale) {
                 DiagnosticItemRow(
                     label = "Service Health",
-                    value = "Potentially Stale (>45s idle)",
+                    value = "Stale (>45s idle)",
                     valueColor = Amber500
                 )
             }
 
-            // User Preference
             DiagnosticItemRow(
                 label = "Background Preference",
-                value = if (diagnostics.isBackgroundMonitoringEnabled) "Enabled (Auto-start on boot)" else "Disabled",
+                value = if (diagnostics.isBackgroundMonitoringEnabled) "Auto-start on boot" else "Disabled",
                 valueColor = Color.White
             )
 
-            // Last Speed Sample
             DiagnosticItemRow(
                 label = "Last Speed Sample",
                 value = diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp),
                 valueColor = Color.White
             )
 
-            // Last Service Start
             DiagnosticItemRow(
                 label = "Last Service Start",
                 value = diagnostics.formatTimestamp(diagnostics.lastServiceStartTimestamp),
                 valueColor = Color.White
             )
 
-            // Last Service Stop Reason
             DiagnosticItemRow(
                 label = "Last Stop Reason",
                 value = diagnostics.lastServiceStopReason,
                 valueColor = Slate400
             )
 
-            // Historical Reconciliation Status
             DiagnosticItemRow(
                 label = "Historical Recovery",
                 value = diagnostics.lastReconciliationStatus,
                 valueColor = if (diagnostics.lastReconciliationStatus.startsWith("Success")) Emerald400 else Slate400
             )
 
-            // Permissions Summary
-            val permissionsSummary = "Usage Access: ${if (diagnostics.hasUsageAccessPermission) "OK" else "Missing"} • Notifications: ${if (diagnostics.hasNotificationPermission) "OK" else "Missing"}"
-            DiagnosticItemRow(
-                label = "Permissions",
-                value = permissionsSummary,
-                valueColor = if (diagnostics.hasUsageAccessPermission && diagnostics.hasNotificationPermission) Emerald400 else Amber500
-            )
-
-            // Battery Optimization
             DiagnosticItemRow(
                 label = "Battery Governor",
-                value = if (diagnostics.isBatteryOptimizationIgnored) "Unrestricted (Safe)" else "Optimized (May throttle)",
+                value = if (diagnostics.isBatteryOptimizationIgnored) "Unrestricted" else "Optimized",
                 valueColor = if (diagnostics.isBatteryOptimizationIgnored) Emerald400 else Amber500
             )
 
-            // Hardware details
             DiagnosticItemRow(
                 label = "Device Hardware",
-                value = "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
+                value = "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion})",
                 valueColor = Slate400
             )
         }
@@ -975,7 +729,7 @@ private fun DiagnosticItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top
     ) {
@@ -995,104 +749,5 @@ private fun DiagnosticItemRow(
             modifier = Modifier.weight(1.5f),
             textAlign = TextAlign.End
         )
-    }
-}
-
-@Composable
-private fun EmptyHistoryCard(isMonitoring: Boolean) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(14.dp)),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.Speed,
-                contentDescription = null,
-                tint = Slate600,
-                modifier = Modifier.size(32.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = if (isMonitoring) "Sampling network activity into Room..." else "Monitoring paused.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate400
-            )
-        }
-    }
-}
-
-@Composable
-private fun SpeedRecordRow(record: SpeedRecordEntity) {
-    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    val formattedTime = timeFormat.format(Date(record.timestamp))
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Slate800, RoundedCornerShape(12.dp)),
-        color = DarkSurface,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = formattedTime,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = record.networkType,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Slate400
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDownward,
-                        contentDescription = null,
-                        tint = Emerald400,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = NetworkUtils.formatSpeed(record.downloadBps),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowUpward,
-                        contentDescription = null,
-                        tint = Blue400,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = NetworkUtils.formatSpeed(record.uploadBps),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White
-                    )
-                }
-            }
-        }
     }
 }
