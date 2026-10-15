@@ -19,7 +19,8 @@ class NetPulseApp : Application() {
         NetworkRepository(
             context = applicationContext,
             speedRecordDao = database.speedRecordDao(),
-            dailyUsageDao = database.dailyUsageDao()
+            dailyUsageDao = database.dailyUsageDao(),
+            preferencesManager = preferencesManager
         )
     }
 

@@ -3,6 +3,7 @@ package com.ayush.netpulse.ui.dashboard
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.data.local.SpeedRecordEntity
 import com.ayush.netpulse.data.model.DataUsage
+import com.ayush.netpulse.data.model.DiagnosticsInfo
 import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.model.NetworkType
 
@@ -17,6 +18,7 @@ data class DashboardUiState(
     val dailyUsage: DataUsage = DataUsage(),
     val recentDailyRecords: List<DailyUsageEntity> = emptyList(),
     val recentRecords: List<SpeedRecordEntity> = emptyList(),
+    val diagnosticsInfo: DiagnosticsInfo = DiagnosticsInfo(),
     val isLoadingUsage: Boolean = false,
     val usageErrorMessage: String? = null
 )

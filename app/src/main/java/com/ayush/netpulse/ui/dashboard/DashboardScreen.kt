@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
@@ -56,10 +57,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.data.local.SpeedRecordEntity
+import com.ayush.netpulse.data.model.DiagnosticsInfo
 import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.ui.theme.Amber500
 import com.ayush.netpulse.ui.theme.Blue400
@@ -156,7 +159,7 @@ fun DashboardScreen(
                 )
             }
 
-            // Daily Usage History from Room
+            // Daily Usage History from Room (Multi-day recovery)
             if (uiState.recentDailyRecords.isNotEmpty()) {
                 item {
                     Text(
@@ -170,6 +173,11 @@ fun DashboardScreen(
                 items(uiState.recentDailyRecords) { dailyRecord ->
                     DailyUsageRow(dailyUsage = dailyRecord)
                 }
+            }
+
+            // Monitoring Diagnostics Section
+            item {
+                DiagnosticsSection(diagnostics = uiState.diagnosticsInfo)
             }
 
             // Recent Room Speed Records Header
@@ -848,6 +856,145 @@ private fun DailyUsageRow(dailyUsage: DailyUsageEntity) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(18.dp)),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "System & Monitoring Diagnostics",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Cyan400,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Service Process Status
+            DiagnosticItemRow(
+                label = "Foreground Service",
+                value = if (diagnostics.isForegroundServiceRunning) "Running" else "Stopped",
+                valueColor = if (diagnostics.isForegroundServiceRunning) Emerald400 else Slate400
+            )
+
+            // Stale Process State Check
+            if (diagnostics.isServiceStatePotentiallyStale) {
+                DiagnosticItemRow(
+                    label = "Service Health",
+                    value = "Potentially Stale (>45s idle)",
+                    valueColor = Amber500
+                )
+            }
+
+            // User Preference
+            DiagnosticItemRow(
+                label = "Background Preference",
+                value = if (diagnostics.isBackgroundMonitoringEnabled) "Enabled (Auto-start on boot)" else "Disabled",
+                valueColor = Color.White
+            )
+
+            // Last Speed Sample
+            DiagnosticItemRow(
+                label = "Last Speed Sample",
+                value = diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp),
+                valueColor = Color.White
+            )
+
+            // Last Service Start
+            DiagnosticItemRow(
+                label = "Last Service Start",
+                value = diagnostics.formatTimestamp(diagnostics.lastServiceStartTimestamp),
+                valueColor = Color.White
+            )
+
+            // Last Service Stop Reason
+            DiagnosticItemRow(
+                label = "Last Stop Reason",
+                value = diagnostics.lastServiceStopReason,
+                valueColor = Slate400
+            )
+
+            // Historical Reconciliation Status
+            DiagnosticItemRow(
+                label = "Historical Recovery",
+                value = diagnostics.lastReconciliationStatus,
+                valueColor = if (diagnostics.lastReconciliationStatus.startsWith("Success")) Emerald400 else Slate400
+            )
+
+            // Permissions Summary
+            val permissionsSummary = "Usage Access: ${if (diagnostics.hasUsageAccessPermission) "OK" else "Missing"} • Notifications: ${if (diagnostics.hasNotificationPermission) "OK" else "Missing"}"
+            DiagnosticItemRow(
+                label = "Permissions",
+                value = permissionsSummary,
+                valueColor = if (diagnostics.hasUsageAccessPermission && diagnostics.hasNotificationPermission) Emerald400 else Amber500
+            )
+
+            // Battery Optimization
+            DiagnosticItemRow(
+                label = "Battery Governor",
+                value = if (diagnostics.isBatteryOptimizationIgnored) "Unrestricted (Safe)" else "Optimized (May throttle)",
+                valueColor = if (diagnostics.isBatteryOptimizationIgnored) Emerald400 else Amber500
+            )
+
+            // Hardware details
+            DiagnosticItemRow(
+                label = "Device Hardware",
+                value = "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
+                valueColor = Slate400
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticItemRow(
+    label: String,
+    value: String,
+    valueColor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Slate400,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = valueColor,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1.5f),
+            textAlign = TextAlign.End
+        )
     }
 }
 

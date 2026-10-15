@@ -1,8 +1,10 @@
 package com.ayush.netpulse.service
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import com.ayush.netpulse.util.PreferencesManager
 
@@ -16,8 +18,12 @@ class BootReceiver : BroadcastReceiver() {
                 Log.d("BootReceiver", "Boot completed or package replaced: restoring SpeedTrackerService")
                 try {
                     SpeedTrackerService.start(context)
-                } catch (e: Exception) {
-                    Log.e("BootReceiver", "Failed to start service on boot: ${e.message}")
+                } catch (e: Throwable) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+                        Log.w("BootReceiver", "Foreground service start restricted by system policy: ${e.message}")
+                    } else {
+                        Log.e("BootReceiver", "Failed to start service on boot: ${e.message}", e)
+                    }
                 }
             }
         }

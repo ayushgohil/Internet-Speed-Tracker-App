@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ayush.netpulse.NetPulseApp
+import com.ayush.netpulse.data.model.DiagnosticsInfo
 import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.repository.NetworkRepository
 import com.ayush.netpulse.service.SpeedTrackerService
@@ -63,6 +64,7 @@ class DashboardViewModel(
         viewModelScope.launch {
             SpeedTrackerService.isServiceRunningState.collect { running ->
                 _uiState.update { it.copy(isBackgroundServiceRunning = running) }
+                refreshDiagnostics()
                 if (running) {
                     stopLocalMonitoring()
                 } else if (_uiState.value.isMonitoringActive) {
@@ -80,7 +82,7 @@ class DashboardViewModel(
             }
         }
 
-        // Initial permissions and usage check
+        // Initial permissions, usage, and diagnostics check
         refreshPermissionsAndUsage()
 
         // If background monitoring was previously enabled by user, restart the service
@@ -113,6 +115,8 @@ class DashboardViewModel(
             )
         }
 
+        refreshDiagnostics()
+
         if (hasUsagePerm) {
             loadDailyDataUsage()
         } else {
@@ -122,6 +126,33 @@ class DashboardViewModel(
                 )
             }
         }
+    }
+
+    fun refreshDiagnostics() {
+        val isServiceRunning = SpeedTrackerService.isServiceRunningState.value
+        val lastSampleTime = preferencesManager.lastSpeedSampleTimestamp
+        val timeSinceLastSample = System.currentTimeMillis() - lastSampleTime
+        val isPotentiallyStale = isServiceRunning && lastSampleTime > 0L && timeSinceLastSample > 45000L
+
+        val diag = DiagnosticsInfo(
+            isBackgroundMonitoringEnabled = preferencesManager.isBackgroundMonitoringEnabled,
+            isForegroundServiceRunning = isServiceRunning,
+            isServiceStatePotentiallyStale = isPotentiallyStale,
+            lastSpeedSampleTimestamp = lastSampleTime,
+            lastReconciliationTimestamp = preferencesManager.lastReconciledTimestamp,
+            lastReconciliationStatus = preferencesManager.lastReconciliationStatus ?: "Not executed",
+            lastServiceStartTimestamp = preferencesManager.lastServiceStartTimestamp,
+            lastServiceStopReason = preferencesManager.lastServiceStopReason ?: "None",
+            hasNotificationPermission = _uiState.value.hasNotificationPermission,
+            hasUsageAccessPermission = _uiState.value.hasUsageAccessPermission,
+            isBatteryOptimizationIgnored = _uiState.value.isBatteryOptimizationIgnored,
+            androidVersion = Build.VERSION.RELEASE,
+            apiLevel = Build.VERSION.SDK_INT,
+            deviceManufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() },
+            deviceModel = Build.MODEL
+        )
+
+        _uiState.update { it.copy(diagnosticsInfo = diag) }
     }
 
     fun loadDailyDataUsage() {
@@ -136,6 +167,7 @@ class DashboardViewModel(
                         usageErrorMessage = null
                     )
                 }
+                refreshDiagnostics()
             }.onFailure { err ->
                 _uiState.update {
                     it.copy(
@@ -143,6 +175,7 @@ class DashboardViewModel(
                         usageErrorMessage = err.localizedMessage ?: "Failed to read data usage"
                     )
                 }
+                refreshDiagnostics()
             }
         }
     }
@@ -150,10 +183,11 @@ class DashboardViewModel(
     fun toggleBackgroundService() {
         val context = getApplication<Application>().applicationContext
         if (_uiState.value.isBackgroundServiceRunning) {
-            SpeedTrackerService.stop(context)
+            SpeedTrackerService.stop(context, "User toggled off in UI")
         } else {
             SpeedTrackerService.start(context)
         }
+        refreshDiagnostics()
     }
 
     fun toggleMonitoring() {
@@ -193,6 +227,7 @@ class DashboardViewModel(
             while (isActive) {
                 val speed = repository.sampleCurrentSpeed()
                 _uiState.update { it.copy(liveSpeed = speed) }
+                preferencesManager.lastSpeedSampleTimestamp = System.currentTimeMillis()
 
                 recordSaveCounter++
                 if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || recordSaveCounter >= 3) {

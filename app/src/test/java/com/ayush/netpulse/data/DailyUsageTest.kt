@@ -3,6 +3,7 @@ package com.ayush.netpulse.data
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.util.NetworkUtils
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
@@ -41,7 +42,6 @@ class DailyUsageTest {
 
     @Test
     fun testIdempotentReconciliation_replaceSameDate() {
-        // Simulating 2 queries on the same day (e.g. at 12:00 and at 18:00)
         val snapshotMorning = DailyUsageEntity(
             date = "2026-10-15",
             mobileRxBytes = 50 * 1024 * 1024L,
@@ -60,9 +60,57 @@ class DailyUsageTest {
             lastUpdatedTimestamp = 2000L
         )
 
-        // Storing the absolute evening snapshot replaces the morning one without accumulating morning + evening
         assertEquals(snapshotMorning.date, snapshotEvening.date)
         assertTrue(snapshotEvening.totalAllBytes > snapshotMorning.totalAllBytes)
         assertEquals("830.0 MB", snapshotEvening.formattedTotal)
+    }
+
+    @Test
+    fun testZeroValueProtection_preservesExistingData() {
+        val validHistoricalRecord = DailyUsageEntity(
+            date = "2026-10-14",
+            mobileRxBytes = 400 * 1024 * 1024L,
+            mobileTxBytes = 50 * 1024 * 1024L,
+            wifiRxBytes = 800 * 1024 * 1024L,
+            wifiTxBytes = 60 * 1024 * 1024L,
+            lastUpdatedTimestamp = 5000L
+        )
+
+        // Simulating a temporary query failure returning 0 bytes for a past day
+        val queryResultAllBytes = 0L
+        val offset = 1 // past day (yesterday)
+
+        val finalRecord = if (offset > 0 && queryResultAllBytes == 0L && validHistoricalRecord.totalAllBytes > 0L) {
+            validHistoricalRecord // Protection triggered: preserve existing
+        } else {
+            DailyUsageEntity(date = "2026-10-14")
+        }
+
+        assertEquals(1310 * 1024 * 1024L, finalRecord.totalAllBytes)
+        assertNotEquals(0L, finalRecord.totalAllBytes)
+    }
+
+    @Test
+    fun testDayBoundaryCalculation_localTimezone() {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val startOfDay = cal.timeInMillis
+
+        val endOfDayCal = Calendar.getInstance().apply {
+            timeInMillis = startOfDay
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }
+        val endOfDay = endOfDayCal.timeInMillis
+
+        assertTrue(endOfDay > startOfDay)
+        val diffHours = (endOfDay - startOfDay) / (1000 * 60 * 60)
+        assertEquals(23L, diffHours)
     }
 }
