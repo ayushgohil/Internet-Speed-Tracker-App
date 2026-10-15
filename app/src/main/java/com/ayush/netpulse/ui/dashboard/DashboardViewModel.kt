@@ -1,6 +1,11 @@
 package com.ayush.netpulse.ui.dashboard
 
+import android.Manifest
 import android.app.Application
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -8,7 +13,9 @@ import androidx.lifecycle.viewModelScope
 import com.ayush.netpulse.NetPulseApp
 import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.repository.NetworkRepository
+import com.ayush.netpulse.service.SpeedTrackerService
 import com.ayush.netpulse.util.NetworkUtils
+import com.ayush.netpulse.util.PreferencesManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,17 +27,18 @@ import kotlinx.coroutines.launch
 
 class DashboardViewModel(
     application: Application,
-    private val repository: NetworkRepository
+    private val repository: NetworkRepository,
+    private val preferencesManager: PreferencesManager
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
-    private var monitoringJob: Job? = null
+    private var localMonitoringJob: Job? = null
     private var recordSaveCounter = 0
 
     init {
-        // Observe network connection type (Wi-Fi, Cellular, etc.)
+        // Observe network connection type
         viewModelScope.launch {
             repository.observeNetworkType().collect { netType ->
                 _uiState.update { it.copy(networkType = netType) }
@@ -44,19 +52,68 @@ class DashboardViewModel(
             }
         }
 
-        // Initial check for permissions and data usage
+        // Observe recent Room daily usage records
+        viewModelScope.launch {
+            repository.getRecentDailyUsage(7).collect { dailyRecords ->
+                _uiState.update { it.copy(recentDailyRecords = dailyRecords) }
+            }
+        }
+
+        // Observe background service running state
+        viewModelScope.launch {
+            SpeedTrackerService.isServiceRunningState.collect { running ->
+                _uiState.update { it.copy(isBackgroundServiceRunning = running) }
+                if (running) {
+                    stopLocalMonitoring()
+                } else if (_uiState.value.isMonitoringActive) {
+                    startLocalMonitoring()
+                }
+            }
+        }
+
+        // Observe speed from foreground service when it is running
+        viewModelScope.launch {
+            SpeedTrackerService.liveSpeedState.collect { speed ->
+                if (_uiState.value.isBackgroundServiceRunning) {
+                    _uiState.update { it.copy(liveSpeed = speed) }
+                }
+            }
+        }
+
+        // Initial permissions and usage check
         refreshPermissionsAndUsage()
 
-        // Start live speed sampling
-        startMonitoring()
+        // If background monitoring was previously enabled by user, restart the service
+        if (preferencesManager.isBackgroundMonitoringEnabled && !_uiState.value.isBackgroundServiceRunning) {
+            SpeedTrackerService.start(application)
+        } else {
+            startLocalMonitoring()
+        }
     }
 
     fun refreshPermissionsAndUsage() {
         val context = getApplication<Application>().applicationContext
-        val hasPermission = NetworkUtils.hasUsageStatsPermission(context)
-        _uiState.update { it.copy(hasUsageAccessPermission = hasPermission) }
+        val hasUsagePerm = NetworkUtils.hasUsageStatsPermission(context)
+        val isBatteryIgnored = NetworkUtils.isBatteryOptimizationIgnored(context)
 
-        if (hasPermission) {
+        val hasNotifPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+        _uiState.update {
+            it.copy(
+                hasUsageAccessPermission = hasUsagePerm,
+                hasNotificationPermission = hasNotifPerm,
+                isBatteryOptimizationIgnored = isBatteryIgnored
+            )
+        }
+
+        if (hasUsagePerm) {
             loadDailyDataUsage()
         } else {
             _uiState.update {
@@ -90,38 +147,53 @@ class DashboardViewModel(
         }
     }
 
+    fun toggleBackgroundService() {
+        val context = getApplication<Application>().applicationContext
+        if (_uiState.value.isBackgroundServiceRunning) {
+            SpeedTrackerService.stop(context)
+        } else {
+            SpeedTrackerService.start(context)
+        }
+    }
+
     fun toggleMonitoring() {
         val willBeActive = !_uiState.value.isMonitoringActive
         if (willBeActive) {
-            startMonitoring()
+            _uiState.update { it.copy(isMonitoringActive = true) }
+            if (!_uiState.value.isBackgroundServiceRunning) {
+                startLocalMonitoring()
+            }
         } else {
-            stopMonitoring()
+            _uiState.update { it.copy(isMonitoringActive = false) }
+            if (_uiState.value.isBackgroundServiceRunning) {
+                toggleBackgroundService()
+            }
+            stopLocalMonitoring()
         }
     }
 
     fun onResumeScreen() {
         refreshPermissionsAndUsage()
-        if (_uiState.value.isMonitoringActive && (monitoringJob == null || !monitoringJob!!.isActive)) {
-            startMonitoring()
+        if (!_uiState.value.isBackgroundServiceRunning && _uiState.value.isMonitoringActive) {
+            startLocalMonitoring()
         }
     }
 
     fun onPauseScreen() {
-        // When screen is paused in this milestone, pause sampling to conserve battery
-        stopMonitoring(userPaused = false)
+        if (!_uiState.value.isBackgroundServiceRunning) {
+            stopLocalMonitoring()
+        }
     }
 
-    private fun startMonitoring() {
-        monitoringJob?.cancel()
+    private fun startLocalMonitoring() {
+        localMonitoringJob?.cancel()
         repository.resetSpeedBaseline()
-        _uiState.update { it.copy(isMonitoringActive = true) }
 
-        monitoringJob = viewModelScope.launch {
+        localMonitoringJob = viewModelScope.launch {
             while (isActive) {
                 val speed = repository.sampleCurrentSpeed()
                 _uiState.update { it.copy(liveSpeed = speed) }
 
-                // Save to Room every 3 seconds or when active transfer is detected (>10 KB/s)
                 recordSaveCounter++
                 if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || recordSaveCounter >= 3) {
                     recordSaveCounter = 0
@@ -133,23 +205,18 @@ class DashboardViewModel(
         }
     }
 
-    private fun stopMonitoring(userPaused: Boolean = true) {
-        monitoringJob?.cancel()
-        monitoringJob = null
+    private fun stopLocalMonitoring() {
+        localMonitoringJob?.cancel()
+        localMonitoringJob = null
         repository.resetSpeedBaseline()
-        if (userPaused) {
-            _uiState.update {
-                it.copy(
-                    isMonitoringActive = false,
-                    liveSpeed = LiveSpeed(0L, 0L)
-                )
-            }
+        if (!_uiState.value.isBackgroundServiceRunning) {
+            _uiState.update { it.copy(liveSpeed = LiveSpeed(0L, 0L)) }
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        stopMonitoring()
+        stopLocalMonitoring()
     }
 
     companion object {
@@ -159,7 +226,8 @@ class DashboardViewModel(
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     return DashboardViewModel(
                         application = application,
-                        repository = application.networkRepository
+                        repository = application.networkRepository,
+                        preferencesManager = application.preferencesManager
                     ) as T
                 }
             }

@@ -1,8 +1,11 @@
 package com.ayush.netpulse.ui
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -18,6 +21,15 @@ class MainActivity : ComponentActivity() {
         DashboardViewModel.provideFactory(application as NetPulseApp)
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.refreshPermissionsAndUsage()
+        if (isGranted) {
+            viewModel.toggleBackgroundService()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -28,8 +40,25 @@ class MainActivity : ComponentActivity() {
                 DashboardScreen(
                     uiState = uiState,
                     onToggleMonitoring = { viewModel.toggleMonitoring() },
+                    onToggleBackgroundService = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            !uiState.hasNotificationPermission
+                        ) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            viewModel.toggleBackgroundService()
+                        }
+                    },
                     onRequestUsageAccess = {
                         startActivity(NetworkUtils.createUsageAccessSettingsIntent())
+                    },
+                    onRequestNotificationPermission = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                    onRequestBatteryOptimization = {
+                        startActivity(NetworkUtils.createIgnoreBatteryOptimizationIntent(this))
                     },
                     onRefreshUsage = { viewModel.loadDailyDataUsage() }
                 )

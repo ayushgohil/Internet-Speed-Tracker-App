@@ -10,6 +10,8 @@ import android.net.NetworkRequest
 import android.net.TrafficStats
 import android.os.Build
 import android.util.Log
+import com.ayush.netpulse.data.local.DailyUsageDao
+import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.data.local.SpeedRecordDao
 import com.ayush.netpulse.data.local.SpeedRecordEntity
 import com.ayush.netpulse.data.model.DataUsage
@@ -25,7 +27,8 @@ import java.util.Calendar
 
 class NetworkRepository(
     private val context: Context,
-    private val speedRecordDao: SpeedRecordDao
+    private val speedRecordDao: SpeedRecordDao,
+    private val dailyUsageDao: DailyUsageDao
 ) {
 
     private val connectivityManager =
@@ -127,7 +130,8 @@ class NetworkRepository(
     }
 
     /**
-     * Queries daily Wi-Fi and Mobile data usage from NetworkStatsManager
+     * Queries daily Wi-Fi and Mobile data usage from NetworkStatsManager,
+     * and reconciles the snapshot into the Room daily_usage table.
      */
     suspend fun getTodayDataUsage(): Result<DataUsage> = withContext(Dispatchers.IO) {
         if (!NetworkUtils.hasUsageStatsPermission(context)) {
@@ -159,6 +163,7 @@ class NetworkRepository(
 
             // Wi-Fi usage
             try {
+                @Suppress("DEPRECATION")
                 val wifiBucket = networkStatsManager.querySummaryForDevice(
                     ConnectivityManager.TYPE_WIFI,
                     "",
@@ -173,6 +178,7 @@ class NetworkRepository(
 
             // Mobile usage
             try {
+                @Suppress("DEPRECATION")
                 val mobileBucket = networkStatsManager.querySummaryForDevice(
                     ConnectivityManager.TYPE_MOBILE,
                     null,
@@ -184,6 +190,20 @@ class NetworkRepository(
             } catch (e: Exception) {
                 Log.w("NetworkRepository", "Could not query Mobile data summary: ${e.message}")
             }
+
+            val todayDateStr = NetworkUtils.formatDateString(now)
+
+            // Idempotent upsert of absolute daily totals into Room
+            dailyUsageDao.upsert(
+                DailyUsageEntity(
+                    date = todayDateStr,
+                    mobileRxBytes = mobileRx,
+                    mobileTxBytes = mobileTx,
+                    wifiRxBytes = wifiRx,
+                    wifiTxBytes = wifiTx,
+                    lastUpdatedTimestamp = now
+                )
+            )
 
             Result.success(
                 DataUsage(
@@ -225,5 +245,12 @@ class NetworkRepository(
      */
     fun getRecentSpeedRecords(limit: Int = 10): Flow<List<SpeedRecordEntity>> {
         return speedRecordDao.getRecentRecords(limit)
+    }
+
+    /**
+     * Flow of recent daily usage summaries from Room
+     */
+    fun getRecentDailyUsage(limit: Int = 7): Flow<List<DailyUsageEntity>> {
+        return dailyUsageDao.getRecentDailyUsage(limit)
     }
 }

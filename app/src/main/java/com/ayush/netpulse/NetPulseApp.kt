@@ -3,6 +3,7 @@ package com.ayush.netpulse
 import android.app.Application
 import com.ayush.netpulse.data.local.NetPulseDatabase
 import com.ayush.netpulse.data.repository.NetworkRepository
+import com.ayush.netpulse.util.PreferencesManager
 
 class NetPulseApp : Application() {
 
@@ -10,10 +11,15 @@ class NetPulseApp : Application() {
         NetPulseDatabase.getDatabase(this)
     }
 
+    val preferencesManager: PreferencesManager by lazy {
+        PreferencesManager.getInstance(this)
+    }
+
     val networkRepository: NetworkRepository by lazy {
         NetworkRepository(
             context = applicationContext,
-            speedRecordDao = database.speedRecordDao()
+            speedRecordDao = database.speedRecordDao(),
+            dailyUsageDao = database.dailyUsageDao()
         )
     }
 

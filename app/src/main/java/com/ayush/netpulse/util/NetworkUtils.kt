@@ -1,11 +1,16 @@
 package com.ayush.netpulse.util
 
+import android.annotation.SuppressLint
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 object NetworkUtils {
@@ -40,6 +45,14 @@ object NetworkUtils {
     }
 
     /**
+     * Formats a epoch timestamp into a local date string (yyyy-MM-dd)
+     */
+    fun formatDateString(timestamp: Long = System.currentTimeMillis()): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        return sdf.format(Date(timestamp))
+    }
+
+    /**
      * Checks if the PACKAGE_USAGE_STATS special permission is granted via AppOpsManager
      */
     fun hasUsageStatsPermission(context: Context): Boolean {
@@ -67,6 +80,31 @@ object NetworkUtils {
     fun createUsageAccessSettingsIntent(): Intent {
         return Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+    }
+
+    /**
+     * Checks if battery optimization is disabled (whitelisted) for this app
+     */
+    fun isBatteryOptimizationIgnored(context: Context): Boolean {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
+        return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    /**
+     * Creates an intent directing the user to battery optimization exemptions
+     */
+    @SuppressLint("BatteryLife")
+    fun createIgnoreBatteryOptimizationIntent(context: Context): Intent {
+        return try {
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+        } catch (e: Exception) {
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
         }
     }
 }
