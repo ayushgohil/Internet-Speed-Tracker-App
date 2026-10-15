@@ -37,6 +37,7 @@ fun MainScreen(
     onRequestBatteryOptimization: () -> Unit,
     onRefreshUsage: () -> Unit,
     onClearLogs: () -> Unit,
+    onSetLogRetentionDays: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentScreen by rememberSaveable { mutableStateOf(NavScreen.DASHBOARD) }
@@ -102,6 +103,8 @@ fun MainScreen(
             NavScreen.LOGS -> {
                 LogsTab(
                     records = uiState.recentRecords,
+                    retentionDays = uiState.diagnosticsInfo.logRetentionDays,
+                    onSetRetentionDays = onSetLogRetentionDays,
                     onClearLogs = onClearLogs,
                     modifier = Modifier.padding(innerPadding)
                 )

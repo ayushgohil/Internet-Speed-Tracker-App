@@ -36,6 +36,18 @@ class PreferencesManager(context: Context) {
         get() = prefs.getLong(KEY_LAST_SPEED_SAMPLE_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_SPEED_SAMPLE_TIMESTAMP, value).apply()
 
+    var logRetentionDays: Int
+        get() = prefs.getInt(KEY_LOG_RETENTION_DAYS, 30)
+        set(value) = prefs.edit().putInt(KEY_LOG_RETENTION_DAYS, value).apply()
+
+    var lastKnownError: String?
+        get() = prefs.getString(KEY_LAST_KNOWN_ERROR, null)
+        set(value) = prefs.edit().putString(KEY_LAST_KNOWN_ERROR, value).apply()
+
+    var lastCleanupTimestamp: Long
+        get() = prefs.getLong(KEY_LAST_CLEANUP_TIMESTAMP, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_CLEANUP_TIMESTAMP, value).apply()
+
     companion object {
         private const val PREFS_NAME = "netpulse_preferences"
         private const val KEY_BACKGROUND_MONITORING = "key_background_monitoring"
@@ -45,6 +57,9 @@ class PreferencesManager(context: Context) {
         private const val KEY_LAST_SERVICE_START_TIMESTAMP = "key_last_service_start_timestamp"
         private const val KEY_LAST_SERVICE_STOP_REASON = "key_last_service_stop_reason"
         private const val KEY_LAST_SPEED_SAMPLE_TIMESTAMP = "key_last_speed_sample_timestamp"
+        private const val KEY_LOG_RETENTION_DAYS = "key_log_retention_days"
+        private const val KEY_LAST_KNOWN_ERROR = "key_last_known_error"
+        private const val KEY_LAST_CLEANUP_TIMESTAMP = "key_last_cleanup_timestamp"
 
         @Volatile
         private var INSTANCE: PreferencesManager? = null

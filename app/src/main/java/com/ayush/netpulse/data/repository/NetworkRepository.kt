@@ -132,18 +132,20 @@ class NetworkRepository(
     /**
      * Multi-day historical usage recovery:
      * Reconciles usage for today, yesterday, and any missed calendar days up to maxLookbackDays.
-     * Protects existing non-zero records from being overwritten with temporary zeros.
+     * Protects existing non-zero records from being overwritten with temporary zeros or delayed drops.
      */
     suspend fun reconcileMultiDayHistoricalUsage(maxLookbackDays: Int = 14): Result<Int> = withContext(Dispatchers.IO) {
         if (!NetworkUtils.hasUsageStatsPermission(context)) {
             val err = "Usage Access permission is not granted."
             preferencesManager.lastReconciliationStatus = "Failed: $err"
+            preferencesManager.lastKnownError = err
             return@withContext Result.failure(SecurityException(err))
         }
 
         if (networkStatsManager == null) {
             val err = "NetworkStatsManager is unavailable on this device."
             preferencesManager.lastReconciliationStatus = "Failed: $err"
+            preferencesManager.lastKnownError = err
             return@withContext Result.failure(IllegalStateException(err))
         }
 
@@ -153,25 +155,23 @@ class NetworkRepository(
 
             // Look back up to maxLookbackDays, or at least 1 day back (yesterday) for delayed carrier logs
             for (offset in (maxLookbackDays - 1) downTo 0) {
-                val cal = Calendar.getInstance().apply {
+                val dayStartCal = Calendar.getInstance().apply {
                     add(Calendar.DAY_OF_YEAR, -offset)
                     set(Calendar.HOUR_OF_DAY, 0)
                     set(Calendar.MINUTE, 0)
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }
-                val startOfDay = cal.timeInMillis
+                val startOfDay = dayStartCal.timeInMillis
 
-                val endOfDay = if (offset == 0) {
-                    now
-                } else {
-                    cal.apply {
-                        set(Calendar.HOUR_OF_DAY, 23)
-                        set(Calendar.MINUTE, 59)
-                        set(Calendar.SECOND, 59)
-                        set(Calendar.MILLISECOND, 999)
-                    }.timeInMillis
+                val dayEndCal = Calendar.getInstance().apply {
+                    timeInMillis = startOfDay
+                    set(Calendar.HOUR_OF_DAY, 23)
+                    set(Calendar.MINUTE, 59)
+                    set(Calendar.SECOND, 59)
+                    set(Calendar.MILLISECOND, 999)
                 }
+                val endOfDay = if (offset == 0) now else dayEndCal.timeInMillis
 
                 val dateStr = NetworkUtils.formatDateString(startOfDay)
 
@@ -213,10 +213,26 @@ class NetworkRepository(
                 val queryTotalBytes = wifiRx + wifiTx + mobileRx + mobileTx
                 val existingRecord = dailyUsageDao.getUsageForDate(dateStr)
 
-                // Zero-value protection: Avoid replacing valid stored historical data with zero if stats are temporarily delayed
-                if (offset > 0 && queryTotalBytes == 0L && existingRecord != null && existingRecord.totalAllBytes > 0L) {
-                    Log.d("NetworkRepository", "Skipping zero-overwrite for $dateStr; retaining existing ${existingRecord.formattedTotal}")
-                } else if (queryTotalBytes > 0L || existingRecord == null || offset == 0) {
+                if (existingRecord != null) {
+                    // Zero-value & delayed drop protection: preserve larger known totals
+                    val finalWifiRx = maxOf(existingRecord.wifiRxBytes, wifiRx)
+                    val finalWifiTx = maxOf(existingRecord.wifiTxBytes, wifiTx)
+                    val finalMobileRx = maxOf(existingRecord.mobileRxBytes, mobileRx)
+                    val finalMobileTx = maxOf(existingRecord.mobileTxBytes, mobileTx)
+
+                    dailyUsageDao.upsert(
+                        DailyUsageEntity(
+                            date = dateStr,
+                            mobileRxBytes = finalMobileRx,
+                            mobileTxBytes = finalMobileTx,
+                            wifiRxBytes = finalWifiRx,
+                            wifiTxBytes = finalWifiTx,
+                            lastUpdatedTimestamp = now
+                        )
+                    )
+                    daysReconciled++
+                } else if (queryTotalBytes > 0L || offset == 0) {
+                    // Only insert new records if real usage occurred or it's today
                     dailyUsageDao.upsert(
                         DailyUsageEntity(
                             date = dateStr,
@@ -229,6 +245,7 @@ class NetworkRepository(
                     )
                     daysReconciled++
                 }
+                // If past day has queryTotalBytes == 0L and existingRecord == null, leave as unknown
             }
 
             val todayStr = NetworkUtils.formatDateString(now)
@@ -238,31 +255,37 @@ class NetworkRepository(
 
             Result.success(daysReconciled)
         } catch (e: Exception) {
-            preferencesManager.lastReconciliationStatus = "Error: ${e.localizedMessage}"
+            val err = "Reconciliation error: ${e.localizedMessage}"
+            preferencesManager.lastReconciliationStatus = err
+            preferencesManager.lastKnownError = err
             Result.failure(e)
         }
     }
 
     /**
      * Queries daily Wi-Fi and Mobile data usage from NetworkStatsManager for today,
-     * and triggers multi-day reconciliation.
+     * and triggers multi-day reconciliation if stale or forced.
      */
-    suspend fun getTodayDataUsage(): Result<DataUsage> = withContext(Dispatchers.IO) {
+    suspend fun getTodayDataUsage(forceReconcile: Boolean = false): Result<DataUsage> = withContext(Dispatchers.IO) {
         if (!NetworkUtils.hasUsageStatsPermission(context)) {
-            return@withContext Result.failure(
-                SecurityException("Usage Access permission (PACKAGE_USAGE_STATS) is not granted.")
-            )
+            val err = "Usage Access permission (PACKAGE_USAGE_STATS) is not granted."
+            preferencesManager.lastKnownError = err
+            return@withContext Result.failure(SecurityException(err))
         }
 
         if (networkStatsManager == null) {
-            return@withContext Result.failure(
-                IllegalStateException("NetworkStatsManager is unavailable on this device.")
-            )
+            val err = "NetworkStatsManager is unavailable on this device."
+            preferencesManager.lastKnownError = err
+            return@withContext Result.failure(IllegalStateException(err))
         }
 
         try {
-            // First reconcile any missing days
-            reconcileMultiDayHistoricalUsage(maxLookbackDays = 7)
+            val now = System.currentTimeMillis()
+            val timeSinceLastReconciliation = now - preferencesManager.lastReconciledTimestamp
+            // Reconcile multi-day history if requested, or if 15 minutes have elapsed since last check
+            if (forceReconcile || timeSinceLastReconciliation > 15 * 60 * 1000L) {
+                reconcileMultiDayHistoricalUsage(maxLookbackDays = 7)
+            }
 
             val calendar = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0)
@@ -271,7 +294,6 @@ class NetworkRepository(
                 set(Calendar.MILLISECOND, 0)
             }
             val startOfDay = calendar.timeInMillis
-            val now = System.currentTimeMillis()
 
             var wifiRx = 0L
             var wifiTx = 0L
@@ -317,6 +339,7 @@ class NetworkRepository(
                 )
             )
         } catch (e: Exception) {
+            preferencesManager.lastKnownError = "Today usage query error: ${e.localizedMessage}"
             Result.failure(e)
         }
     }
@@ -353,6 +376,13 @@ class NetworkRepository(
      */
     fun getRecentDailyUsage(limit: Int = 7): Flow<List<DailyUsageEntity>> {
         return dailyUsageDao.getRecentDailyUsage(limit)
+    }
+
+    /**
+     * Purges speed records older than cutoff timestamp (without touching daily usage records)
+     */
+    suspend fun deleteSpeedRecordsOlderThan(cutoffTimestamp: Long): Int = withContext(Dispatchers.IO) {
+        speedRecordDao.deleteOldRecords(cutoffTimestamp)
     }
 
     /**

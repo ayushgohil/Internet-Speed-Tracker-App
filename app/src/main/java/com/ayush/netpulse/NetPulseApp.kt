@@ -27,6 +27,7 @@ class NetPulseApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        com.ayush.netpulse.worker.LogRetentionWorker.enqueuePeriodic(this)
     }
 
     companion object {

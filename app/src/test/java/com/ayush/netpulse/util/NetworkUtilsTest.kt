@@ -26,4 +26,16 @@ class NetworkUtilsTest {
         assertEquals("500.0 MB", NetworkUtils.formatBytes(500 * 1024 * 1024L))
         assertEquals("1.50 GB", NetworkUtils.formatBytes((1.5 * 1024 * 1024 * 1024).toLong()))
     }
+
+    @Test
+    fun testFormatBytes_bytesAndKilobytes() {
+        assertEquals("0.0 MB", NetworkUtils.formatBytes(0L))
+        assertEquals("500 B", NetworkUtils.formatBytes(500L))
+        assertEquals("10.0 KB", NetworkUtils.formatBytes(10 * 1024L))
+    }
+
+    @Test
+    fun testFormatSpeed_gigabytes() {
+        assertEquals("1.20 GB/s", NetworkUtils.formatSpeed((1.2 * 1024 * 1024 * 1024).toLong()))
+    }
 }

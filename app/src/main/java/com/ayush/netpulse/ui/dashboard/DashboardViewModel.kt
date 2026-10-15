@@ -143,6 +143,9 @@ class DashboardViewModel(
             lastReconciliationStatus = preferencesManager.lastReconciliationStatus ?: "Not executed",
             lastServiceStartTimestamp = preferencesManager.lastServiceStartTimestamp,
             lastServiceStopReason = preferencesManager.lastServiceStopReason ?: "None",
+            lastKnownError = preferencesManager.lastKnownError,
+            logRetentionDays = preferencesManager.logRetentionDays,
+            lastCleanupTimestamp = preferencesManager.lastCleanupTimestamp,
             hasNotificationPermission = _uiState.value.hasNotificationPermission,
             hasUsageAccessPermission = _uiState.value.hasUsageAccessPermission,
             isBatteryOptimizationIgnored = _uiState.value.isBatteryOptimizationIgnored,
@@ -155,10 +158,10 @@ class DashboardViewModel(
         _uiState.update { it.copy(diagnosticsInfo = diag) }
     }
 
-    fun loadDailyDataUsage() {
+    fun loadDailyDataUsage(forceReconcile: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingUsage = true, usageErrorMessage = null) }
-            val result = repository.getTodayDataUsage()
+            val result = repository.getTodayDataUsage(forceReconcile = forceReconcile)
             result.onSuccess { usage ->
                 _uiState.update {
                     it.copy(
@@ -253,6 +256,12 @@ class DashboardViewModel(
         viewModelScope.launch {
             repository.clearSpeedRecords()
         }
+    }
+
+    fun setLogRetentionDays(days: Int) {
+        preferencesManager.logRetentionDays = days
+        com.ayush.netpulse.worker.LogRetentionWorker.triggerImmediate(getApplication())
+        refreshDiagnostics()
     }
 
     override fun onCleared() {

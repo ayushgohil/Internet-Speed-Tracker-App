@@ -632,6 +632,13 @@ private fun QuickNavCard(
 
 @Composable
 private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
+    val serviceStatusColor = when (diagnostics.resolvedServiceStatus) {
+        "Active" -> Emerald400
+        "Stopped" -> Slate400
+        "Needs Permission" -> Amber500
+        else -> Rose500
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -662,9 +669,15 @@ private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
             Spacer(modifier = Modifier.height(10.dp))
 
             DiagnosticItemRow(
-                label = "Service Process",
-                value = if (diagnostics.isForegroundServiceRunning) "Running" else "Stopped",
-                valueColor = if (diagnostics.isForegroundServiceRunning) Emerald400 else Slate400
+                label = "Monitoring",
+                value = if (diagnostics.isBackgroundMonitoringEnabled) "Enabled" else "Disabled",
+                valueColor = if (diagnostics.isBackgroundMonitoringEnabled) Cyan400 else Slate400
+            )
+
+            DiagnosticItemRow(
+                label = "Last Known Service State",
+                value = diagnostics.resolvedServiceStatus,
+                valueColor = serviceStatusColor
             )
 
             if (diagnostics.isServiceStatePotentiallyStale) {
@@ -676,46 +689,69 @@ private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
             }
 
             DiagnosticItemRow(
-                label = "Background Preference",
-                value = if (diagnostics.isBackgroundMonitoringEnabled) "Auto-start on boot" else "Disabled",
-                valueColor = Color.White
-            )
-
-            DiagnosticItemRow(
-                label = "Last Speed Sample",
-                value = diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp),
-                valueColor = Color.White
-            )
-
-            DiagnosticItemRow(
                 label = "Last Service Start",
                 value = diagnostics.formatTimestamp(diagnostics.lastServiceStartTimestamp),
                 valueColor = Color.White
             )
 
             DiagnosticItemRow(
-                label = "Last Stop Reason",
-                value = diagnostics.lastServiceStopReason,
-                valueColor = Slate400
+                label = "Last Speed Measurement",
+                value = diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp),
+                valueColor = Color.White
             )
 
             DiagnosticItemRow(
-                label = "Historical Recovery",
+                label = "Historical Reconciliation",
+                value = diagnostics.formatTimestamp(diagnostics.lastReconciliationTimestamp),
+                valueColor = Color.White
+            )
+
+            DiagnosticItemRow(
+                label = "Reconciliation Status",
                 value = diagnostics.lastReconciliationStatus,
                 valueColor = if (diagnostics.lastReconciliationStatus.startsWith("Success")) Emerald400 else Slate400
             )
 
             DiagnosticItemRow(
-                label = "Battery Governor",
+                label = "Usage Access",
+                value = if (diagnostics.hasUsageAccessPermission) "Granted" else "Needs Permission",
+                valueColor = if (diagnostics.hasUsageAccessPermission) Emerald400 else Amber500
+            )
+
+            DiagnosticItemRow(
+                label = "Notification Permission",
+                value = if (diagnostics.hasNotificationPermission) "Granted" else "Needs Permission",
+                valueColor = if (diagnostics.hasNotificationPermission) Emerald400 else Amber500
+            )
+
+            DiagnosticItemRow(
+                label = "Battery Optimization",
                 value = if (diagnostics.isBatteryOptimizationIgnored) "Unrestricted" else "Optimized",
                 valueColor = if (diagnostics.isBatteryOptimizationIgnored) Emerald400 else Amber500
             )
 
             DiagnosticItemRow(
-                label = "Device Hardware",
-                value = "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion})",
+                label = "Android & Hardware",
+                value = "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
                 valueColor = Slate400
             )
+
+            if (!diagnostics.lastKnownError.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Rose500.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Last Known Error: ${diagnostics.lastKnownError}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Rose500,
+                        fontSize = 11.sp
+                    )
+                }
+            }
         }
     }
 }

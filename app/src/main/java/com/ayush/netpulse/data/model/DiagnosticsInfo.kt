@@ -1,6 +1,5 @@
 package com.ayush.netpulse.data.model
 
-import com.ayush.netpulse.util.NetworkUtils
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -14,6 +13,9 @@ data class DiagnosticsInfo(
     val lastReconciliationStatus: String = "Not yet executed",
     val lastServiceStartTimestamp: Long = 0L,
     val lastServiceStopReason: String = "None",
+    val lastKnownError: String? = null,
+    val logRetentionDays: Int = 30,
+    val lastCleanupTimestamp: Long = 0L,
     val hasNotificationPermission: Boolean = false,
     val hasUsageAccessPermission: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,
@@ -22,6 +24,20 @@ data class DiagnosticsInfo(
     val deviceManufacturer: String = "",
     val deviceModel: String = ""
 ) {
+    /**
+     * Resolves the verified service state using requested standard categories:
+     * "Active", "Stopped", "Unknown", or "Needs Permission".
+     * Does not assume the service is running merely because monitoring is enabled in prefs.
+     */
+    val resolvedServiceStatus: String
+        get() = when {
+            isForegroundServiceRunning -> "Active"
+            !hasNotificationPermission -> "Needs Permission"
+            !isBackgroundMonitoringEnabled -> "Stopped"
+            isServiceStatePotentiallyStale -> "Unknown (Stale)"
+            else -> "Unknown"
+        }
+
     fun formatTimestamp(timestamp: Long): String {
         if (timestamp <= 0L) return "Never"
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())

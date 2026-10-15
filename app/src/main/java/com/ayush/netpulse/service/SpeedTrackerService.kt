@@ -81,22 +81,30 @@ class SpeedTrackerService : Service() {
             currentNetworkType
         )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    initialNotification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                )
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        initialNotification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                    )
+                } else {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        initialNotification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    )
+                }
             } else {
-                startForeground(
-                    NOTIFICATION_ID,
-                    initialNotification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                )
+                startForeground(NOTIFICATION_ID, initialNotification)
             }
-        } else {
-            startForeground(NOTIFICATION_ID, initialNotification)
+            preferencesManager.lastKnownError = null
+        } catch (e: Exception) {
+            preferencesManager.lastKnownError = "Foreground service startup error: ${e.localizedMessage}"
+            _isServiceRunningState.value = false
+            stopSelf()
+            return
         }
 
         startSamplingLoops()
@@ -120,6 +128,8 @@ class SpeedTrackerService : Service() {
         // Periodic live speed sampling and notification update
         trackerJob = serviceScope.launch {
             var tickCount = 0
+            var wasLastSavedSpeedZero = false
+
             while (isActive) {
                 val speed = repository.sampleCurrentSpeed()
                 _liveSpeedState.value = speed
@@ -127,7 +137,7 @@ class SpeedTrackerService : Service() {
 
                 tickCount++
 
-                // Efficient notification update: only update system notification when text changed or every 4 ticks
+                // Efficient notification update: update system notification when text changed or every 4 ticks
                 val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}"
                 if (signature != lastNotificationSignature || tickCount >= 4) {
                     lastNotificationSignature = signature
@@ -135,17 +145,37 @@ class SpeedTrackerService : Service() {
                     notificationManager.notify(NOTIFICATION_ID, notification)
                 }
 
-                // Battery efficiency: persist speed to Room only when notable activity or every 10 ticks
-                if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || tickCount >= 10) {
-                    if (speed.downloadBytesPerSec > 0 || speed.uploadBytesPerSec > 0 || tickCount >= 20) {
+                val isScreenInteractive = powerManager.isInteractive
+                val isZeroSpeed = speed.downloadBytesPerSec == 0L && speed.uploadBytesPerSec == 0L
+
+                // Battery & storage efficiency:
+                // When screen is off, avoid saving to database unless there is active data transfer (> 50 KB/s)
+                if (isScreenInteractive) {
+                    if (isZeroSpeed) {
+                        if (!wasLastSavedSpeedZero) {
+                            // Save single 0 record to mark drop to idle, then stop spamming 0s
+                            repository.saveSpeedRecord(speed, currentNetworkType)
+                            wasLastSavedSpeedZero = true
+                            tickCount = 0
+                        }
+                    } else {
+                        wasLastSavedSpeedZero = false
+                        // Save notable active traffic (> 10 KB/s) or periodically every 10 ticks
+                        if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || tickCount >= 10) {
+                            repository.saveSpeedRecord(speed, currentNetworkType)
+                            tickCount = 0
+                        }
+                    }
+                } else {
+                    // Screen locked/off: only log substantial active downloads (> 50 KB/s)
+                    if (speed.downloadBytesPerSec > 51200 || speed.uploadBytesPerSec > 51200) {
                         repository.saveSpeedRecord(speed, currentNetworkType)
                         tickCount = 0
                     }
                 }
 
-                // When screen is off / locked, adapt update rate to 2500ms to preserve battery
-                val isScreenInteractive = powerManager.isInteractive
-                val delayTime = if (isScreenInteractive) 1000L else 2500L
+                // When screen is off / locked, adapt update rate to 5000ms to preserve battery
+                val delayTime = if (isScreenInteractive) 1000L else 5000L
                 delay(delayTime)
             }
         }
@@ -166,6 +196,7 @@ class SpeedTrackerService : Service() {
         repository.resetSpeedBaseline()
 
         stopForeground(STOP_FOREGROUND_REMOVE)
+        notificationManager.cancel(NOTIFICATION_ID)
         stopSelf()
     }
 

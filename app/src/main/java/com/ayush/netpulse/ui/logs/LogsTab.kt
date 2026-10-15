@@ -59,6 +59,8 @@ import java.util.Locale
 @Composable
 fun LogsTab(
     records: List<SpeedRecordEntity>,
+    retentionDays: Int = 30,
+    onSetRetentionDays: (Int) -> Unit = {},
     onClearLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -119,7 +121,7 @@ fun LogsTab(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${records.size} total samples recorded in Room",
+                        text = "${records.size} samples recorded in Room",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Slate400
                     )
@@ -136,6 +138,56 @@ fun LogsTab(
                             tint = Rose500,
                             modifier = Modifier.size(22.dp)
                         )
+                    }
+                }
+            }
+        }
+
+        // Configurable Retention Policy Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, DarkCardBorder, RoundedCornerShape(14.dp)),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "Database Retention Policy",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "WorkManager automatically purges speed samples older than this window to preserve storage. Daily usage summaries are always preserved.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate400,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(7, 30, 90).forEach { days ->
+                            val isSelected = retentionDays == days
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onSetRetentionDays(days) },
+                                label = {
+                                    Text(
+                                        if (days == 30) "30 Days (Default)" else "$days Days",
+                                        fontSize = 12.sp
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Cyan400,
+                                    selectedLabelColor = Color.Black
+                                )
+                            )
+                        }
                     }
                 }
             }

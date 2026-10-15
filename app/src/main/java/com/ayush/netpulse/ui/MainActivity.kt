@@ -59,8 +59,9 @@ class MainActivity : ComponentActivity() {
                     onRequestBatteryOptimization = {
                         startActivity(NetworkUtils.createIgnoreBatteryOptimizationIntent(this))
                     },
-                    onRefreshUsage = { viewModel.loadDailyDataUsage() },
-                    onClearLogs = { viewModel.clearLogs() }
+                    onRefreshUsage = { viewModel.loadDailyDataUsage(forceReconcile = true) },
+                    onClearLogs = { viewModel.clearLogs() },
+                    onSetLogRetentionDays = { days -> viewModel.setLogRetentionDays(days) }
                 )
             }
         }
