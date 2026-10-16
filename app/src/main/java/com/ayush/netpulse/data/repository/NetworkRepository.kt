@@ -118,14 +118,22 @@ class NetworkRepository(
             }
         }
 
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
+        try {
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
 
-        connectivityManager.registerNetworkCallback(request, callback)
+            connectivityManager.registerNetworkCallback(request, callback)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register network callback: ${e.message}", e)
+        }
 
         awaitClose {
-            connectivityManager.unregisterNetworkCallback(callback)
+            try {
+                connectivityManager.unregisterNetworkCallback(callback)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to unregister network callback: ${e.message}")
+            }
         }
     }
 
@@ -392,5 +400,9 @@ class NetworkRepository(
         withContext(Dispatchers.IO) {
             speedRecordDao.clearAllRecords()
         }
+    }
+
+    companion object {
+        private const val TAG = "NetworkRepository"
     }
 }
