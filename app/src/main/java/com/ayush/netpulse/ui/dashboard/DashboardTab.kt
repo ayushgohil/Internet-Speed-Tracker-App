@@ -701,6 +701,28 @@ private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
             )
 
             DiagnosticItemRow(
+                label = "Last Notification Update",
+                value = diagnostics.formatTimestamp(diagnostics.lastNotificationUpdateTimestamp),
+                valueColor = Color.White
+            )
+
+            if (diagnostics.lastServiceDestroyTimestamp > 0L) {
+                DiagnosticItemRow(
+                    label = "Last Process Termination",
+                    value = diagnostics.formatTimestamp(diagnostics.lastServiceDestroyTimestamp),
+                    valueColor = Amber500
+                )
+            }
+
+            if (diagnostics.serviceRestartCount > 0) {
+                DiagnosticItemRow(
+                    label = "OS Restarts Count",
+                    value = "${diagnostics.serviceRestartCount} times",
+                    valueColor = Cyan400
+                )
+            }
+
+            DiagnosticItemRow(
                 label = "Historical Reconciliation",
                 value = diagnostics.formatTimestamp(diagnostics.lastReconciliationTimestamp),
                 valueColor = Color.White

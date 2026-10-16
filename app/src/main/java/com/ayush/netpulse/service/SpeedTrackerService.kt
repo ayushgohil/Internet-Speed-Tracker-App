@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.ayush.netpulse.NetPulseApp
 import com.ayush.netpulse.R
@@ -18,6 +19,7 @@ import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.ui.MainActivity
 import com.ayush.netpulse.util.PreferencesManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,18 +51,40 @@ class SpeedTrackerService : Service() {
         preferencesManager = PreferencesManager.getInstance(this)
         powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         createNotificationChannel()
+        Log.d(TAG, "SpeedTrackerService onCreate")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action ?: ACTION_START
+        // If intent is null, Android recreated the service via START_STICKY
+        if (intent == null) {
+            if (!preferencesManager.isBackgroundMonitoringEnabled) {
+                Log.d(TAG, "System recreated START_STICKY service but user previously disabled monitoring; stopping self")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+
+            Log.d(TAG, "System recreated START_STICKY service while monitoring was enabled; restoring foreground session")
+            preferencesManager.serviceRestartCount = preferencesManager.serviceRestartCount + 1
+            preferencesManager.lastKnownServiceState = "Active (Restored by OS)"
+            startForegroundMonitoring()
+            return START_STICKY
+        }
+
+        val action = intent.action ?: ACTION_START
 
         when (action) {
             ACTION_STOP -> {
-                val reason = intent?.getStringExtra(EXTRA_STOP_REASON) ?: "Stopped by user"
+                val reason = intent.getStringExtra(EXTRA_STOP_REASON) ?: "Stopped by user"
                 stopForegroundMonitoring(reason)
                 return START_NOT_STICKY
             }
             ACTION_START -> {
+                if (_isServiceRunningState.value && trackerJob?.isActive == true) {
+                    Log.d(TAG, "Service is already running actively; updating notification and skipping re-initialization")
+                    updateNotificationSafely(_liveSpeedState.value, currentNetworkType)
+                    return START_STICKY
+                }
                 startForegroundMonitoring()
                 return START_STICKY
             }
@@ -74,6 +98,7 @@ class SpeedTrackerService : Service() {
     private fun startForegroundMonitoring() {
         preferencesManager.isBackgroundMonitoringEnabled = true
         preferencesManager.lastServiceStartTimestamp = System.currentTimeMillis()
+        preferencesManager.lastKnownServiceState = "Active"
         _isServiceRunningState.value = true
 
         val initialNotification = buildNotification(
@@ -99,9 +124,14 @@ class SpeedTrackerService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, initialNotification)
             }
+            preferencesManager.lastNotificationUpdateTimestamp = System.currentTimeMillis()
             preferencesManager.lastKnownError = null
+            Log.d(TAG, "startForeground completed successfully with channel $CHANNEL_ID")
         } catch (e: Exception) {
-            preferencesManager.lastKnownError = "Foreground service startup error: ${e.localizedMessage}"
+            val err = "Foreground start exception (${e.javaClass.simpleName}): ${e.message}"
+            Log.e(TAG, err, e)
+            preferencesManager.lastKnownError = err
+            preferencesManager.lastKnownServiceState = "Start Restricted"
             _isServiceRunningState.value = false
             stopSelf()
             return
@@ -117,73 +147,124 @@ class SpeedTrackerService : Service() {
         val repository = (application as NetPulseApp).networkRepository
         repository.resetSpeedBaseline()
 
-        // Observe network connection changes
+        // 1. Observe network connection changes safely
         networkObserverJob = serviceScope.launch {
-            repository.observeNetworkType().collect { netType ->
-                currentNetworkType = netType
-                _activeNetworkTypeState.value = netType
+            try {
+                repository.observeNetworkType().collect { netType ->
+                    currentNetworkType = netType
+                    _activeNetworkTypeState.value = netType
+                    // When network switches (e.g. Wi-Fi <-> Mobile or Disconnected), immediately update notification
+                    val speed = if (netType == NetworkType.DISCONNECTED) LiveSpeed(0L, 0L) else _liveSpeedState.value
+                    updateNotificationSafely(speed, netType)
+                }
+            } catch (e: Exception) {
+                if (e !is CancellationException) {
+                    Log.w(TAG, "Network observer stream interrupted: ${e.message}")
+                    preferencesManager.lastKnownError = "Network observer: ${e.message}"
+                }
             }
         }
 
-        // Periodic live speed sampling and notification update
+        // 2. Periodic live speed sampling and notification update
         trackerJob = serviceScope.launch {
             var tickCount = 0
             var wasLastSavedSpeedZero = false
+            var lastPrefsWriteTimestamp = 0L
 
             while (isActive) {
-                val speed = repository.sampleCurrentSpeed()
-                _liveSpeedState.value = speed
-                preferencesManager.lastSpeedSampleTimestamp = System.currentTimeMillis()
+                try {
+                    val isScreenInteractive = powerManager.isInteractive
+                    val isOffline = (currentNetworkType == NetworkType.DISCONNECTED)
+                    val now = System.currentTimeMillis()
 
-                tickCount++
-
-                // Efficient notification update: update system notification when text changed or every 4 ticks
-                val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}"
-                if (signature != lastNotificationSignature || tickCount >= 4) {
-                    lastNotificationSignature = signature
-                    val notification = buildNotification(speed, currentNetworkType)
-                    notificationManager.notify(NOTIFICATION_ID, notification)
-                }
-
-                val isScreenInteractive = powerManager.isInteractive
-                val isZeroSpeed = speed.downloadBytesPerSec == 0L && speed.uploadBytesPerSec == 0L
-
-                // Battery & storage efficiency:
-                // When screen is off, avoid saving to database unless there is active data transfer (> 50 KB/s)
-                if (isScreenInteractive) {
-                    if (isZeroSpeed) {
-                        if (!wasLastSavedSpeedZero) {
-                            // Save single 0 record to mark drop to idle, then stop spamming 0s
-                            repository.saveSpeedRecord(speed, currentNetworkType)
-                            wasLastSavedSpeedZero = true
-                            tickCount = 0
-                        }
+                    val speed = if (isOffline) {
+                        LiveSpeed(0L, 0L, now)
                     } else {
-                        wasLastSavedSpeedZero = false
-                        // Save notable active traffic (> 10 KB/s) or periodically every 10 ticks
-                        if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || tickCount >= 10) {
-                            repository.saveSpeedRecord(speed, currentNetworkType)
-                            tickCount = 0
+                        repository.sampleCurrentSpeed()
+                    }
+                    _liveSpeedState.value = speed
+
+                    // Throttled SharedPreferences persistence: Avoid writing to flash memory every 1-2.5s all night
+                    if (now - lastPrefsWriteTimestamp >= 30000L || (!isOffline && (speed.downloadBytesPerSec > 0 || speed.uploadBytesPerSec > 0))) {
+                        preferencesManager.lastSpeedSampleTimestamp = now
+                        lastPrefsWriteTimestamp = now
+                    }
+
+                    tickCount++
+
+                    // Efficient notification update
+                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}"
+                    if (signature != lastNotificationSignature || (isScreenInteractive && tickCount >= 4)) {
+                        lastNotificationSignature = signature
+                        updateNotificationSafely(speed, currentNetworkType)
+                    }
+
+                    val isZeroSpeed = speed.downloadBytesPerSec == 0L && speed.uploadBytesPerSec == 0L
+
+                    // Battery & storage efficiency:
+                    // Never write to Room database when offline or during zero-traffic idle
+                    if (!isOffline) {
+                        if (isScreenInteractive) {
+                            if (isZeroSpeed) {
+                                if (!wasLastSavedSpeedZero) {
+                                    repository.saveSpeedRecord(speed, currentNetworkType)
+                                    wasLastSavedSpeedZero = true
+                                    tickCount = 0
+                                }
+                            } else {
+                                wasLastSavedSpeedZero = false
+                                if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || tickCount >= 10) {
+                                    repository.saveSpeedRecord(speed, currentNetworkType)
+                                    tickCount = 0
+                                }
+                            }
+                        } else {
+                            // Screen locked/off: only log substantial active downloads (> 50 KB/s)
+                            if (speed.downloadBytesPerSec > 51200 || speed.uploadBytesPerSec > 51200) {
+                                repository.saveSpeedRecord(speed, currentNetworkType)
+                                tickCount = 0
+                            }
                         }
                     }
-                } else {
-                    // Screen locked/off: only log substantial active downloads (> 50 KB/s)
-                    if (speed.downloadBytesPerSec > 51200 || speed.uploadBytesPerSec > 51200) {
-                        repository.saveSpeedRecord(speed, currentNetworkType)
-                        tickCount = 0
-                    }
-                }
 
-                // When screen is off / locked, adapt update rate to 5000ms to preserve battery
-                val delayTime = if (isScreenInteractive) 1000L else 5000L
-                delay(delayTime)
+                    // Adaptive sleep interval to preserve battery overnight:
+                    // Interactive: 1000ms
+                    // Screen locked + online: 5000ms
+                    // Screen locked + offline (disconnected / airplane mode): 10000ms (10s)
+                    val delayTime = when {
+                        isScreenInteractive -> 1000L
+                        isOffline -> 10000L
+                        else -> 5000L
+                    }
+                    delay(delayTime)
+
+                } catch (e: CancellationException) {
+                    throw e // propagate coroutine cancellation cleanly
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in speed tracking loop: ${e.message}", e)
+                    preferencesManager.lastKnownError = "Loop error: ${e.message}"
+                    delay(5000L) // safe backoff before retry
+                }
             }
         }
     }
 
+    private fun updateNotificationSafely(speed: LiveSpeed, networkType: NetworkType) {
+        try {
+            val notification = buildNotification(speed, networkType)
+            notificationManager.notify(NOTIFICATION_ID, notification)
+            preferencesManager.lastNotificationUpdateTimestamp = System.currentTimeMillis()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update notification: ${e.message}")
+            preferencesManager.lastKnownError = "Notification update failed: ${e.message}"
+        }
+    }
+
     private fun stopForegroundMonitoring(reason: String = "Stopped by user") {
+        Log.d(TAG, "stopForegroundMonitoring requested: $reason")
         preferencesManager.isBackgroundMonitoringEnabled = false
         preferencesManager.lastServiceStopReason = reason
+        preferencesManager.lastKnownServiceState = "Stopped"
         _isServiceRunningState.value = false
         _liveSpeedState.value = LiveSpeed(0L, 0L)
 
@@ -257,6 +338,7 @@ class SpeedTrackerService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Swiping app from recent tasks must not kill monitoring if user enabled it
+        Log.d(TAG, "onTaskRemoved called; monitoring enabled: ${preferencesManager.isBackgroundMonitoringEnabled}")
         if (!preferencesManager.isBackgroundMonitoringEnabled) {
             stopForegroundMonitoring("App swiped from recent tasks while disabled")
         }
@@ -265,9 +347,18 @@ class SpeedTrackerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (_isServiceRunningState.value) {
-            preferencesManager.lastServiceStopReason = "Destroyed by system"
+        val now = System.currentTimeMillis()
+        preferencesManager.lastServiceDestroyTimestamp = now
+
+        if (preferencesManager.isBackgroundMonitoringEnabled) {
+            val reason = "Terminated by Android system (LMK, Doze, or system policy)"
+            preferencesManager.lastServiceStopReason = reason
+            preferencesManager.lastKnownServiceState = "Terminated by OS"
+            Log.w(TAG, "SpeedTrackerService onDestroy while monitoring was enabled! $reason")
+        } else {
+            preferencesManager.lastKnownServiceState = "Stopped"
         }
+
         _isServiceRunningState.value = false
         serviceScope.cancel()
     }
@@ -275,6 +366,7 @@ class SpeedTrackerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        private const val TAG = "SpeedTrackerService"
         const val CHANNEL_ID = "netpulse_live_speed_channel"
         const val NOTIFICATION_ID = 1001
 

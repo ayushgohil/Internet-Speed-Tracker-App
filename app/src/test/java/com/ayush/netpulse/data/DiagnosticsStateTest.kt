@@ -46,4 +46,16 @@ class DiagnosticsStateTest {
         )
         assertEquals("Unknown", diag.resolvedServiceStatus)
     }
+
+    @Test
+    fun testDiagnosticsState_staleFlagIsPreserved() {
+        val diag = DiagnosticsInfo(
+            isBackgroundMonitoringEnabled = true,
+            isForegroundServiceRunning = true,
+            isServiceStatePotentiallyStale = true,
+            hasNotificationPermission = true
+        )
+        assertEquals("Active", diag.resolvedServiceStatus)
+        assertEquals(true, diag.isServiceStatePotentiallyStale)
+    }
 }

@@ -16,6 +16,9 @@ data class DiagnosticsInfo(
     val lastKnownError: String? = null,
     val logRetentionDays: Int = 30,
     val lastCleanupTimestamp: Long = 0L,
+    val lastNotificationUpdateTimestamp: Long = 0L,
+    val lastServiceDestroyTimestamp: Long = 0L,
+    val serviceRestartCount: Int = 0,
     val hasNotificationPermission: Boolean = false,
     val hasUsageAccessPermission: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,
@@ -34,7 +37,6 @@ data class DiagnosticsInfo(
             isForegroundServiceRunning -> "Active"
             !hasNotificationPermission -> "Needs Permission"
             !isBackgroundMonitoringEnabled -> "Stopped"
-            isServiceStatePotentiallyStale -> "Unknown (Stale)"
             else -> "Unknown"
         }
 
