@@ -13,6 +13,7 @@ data class DiagnosticsInfo(
     val lastReconciliationStatus: String = "Not yet executed",
     val lastServiceStartTimestamp: Long = 0L,
     val lastServiceStopReason: String = "None",
+    val confirmedProcessExitReason: String = "None recorded",
     val lastKnownError: String? = null,
     val logRetentionDays: Int = 30,
     val lastCleanupTimestamp: Long = 0L,

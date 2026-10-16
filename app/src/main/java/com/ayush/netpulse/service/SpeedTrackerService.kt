@@ -107,20 +107,12 @@ class SpeedTrackerService : Service() {
         )
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        initialNotification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                    )
-                } else {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        initialNotification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                    )
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    initialNotification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
             } else {
                 startForeground(NOTIFICATION_ID, initialNotification)
             }
@@ -351,10 +343,10 @@ class SpeedTrackerService : Service() {
         preferencesManager.lastServiceDestroyTimestamp = now
 
         if (preferencesManager.isBackgroundMonitoringEnabled) {
-            val reason = "Terminated by Android system (LMK, Doze, or system policy)"
+            val reason = "Service destroyed by OS lifecycle callback"
             preferencesManager.lastServiceStopReason = reason
-            preferencesManager.lastKnownServiceState = "Terminated by OS"
-            Log.w(TAG, "SpeedTrackerService onDestroy while monitoring was enabled! $reason")
+            preferencesManager.lastKnownServiceState = "Destroyed by OS"
+            Log.w(TAG, "SpeedTrackerService onDestroy while monitoring was enabled: $reason")
         } else {
             preferencesManager.lastKnownServiceState = "Stopped"
         }

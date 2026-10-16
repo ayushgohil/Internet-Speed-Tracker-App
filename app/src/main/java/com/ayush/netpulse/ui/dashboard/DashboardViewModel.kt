@@ -129,10 +129,12 @@ class DashboardViewModel(
     }
 
     fun refreshDiagnostics() {
+        val context = getApplication<Application>().applicationContext
         val isServiceRunning = SpeedTrackerService.isServiceRunningState.value
         val lastSampleTime = preferencesManager.lastSpeedSampleTimestamp
         val timeSinceLastSample = System.currentTimeMillis() - lastSampleTime
         val isPotentiallyStale = isServiceRunning && lastSampleTime > 0L && timeSinceLastSample > 45000L
+        val confirmedExit = NetworkUtils.getConfirmedProcessExitReason(context)
 
         val diag = DiagnosticsInfo(
             isBackgroundMonitoringEnabled = preferencesManager.isBackgroundMonitoringEnabled,
@@ -143,6 +145,7 @@ class DashboardViewModel(
             lastReconciliationStatus = preferencesManager.lastReconciliationStatus ?: "Not executed",
             lastServiceStartTimestamp = preferencesManager.lastServiceStartTimestamp,
             lastServiceStopReason = preferencesManager.lastServiceStopReason ?: "None",
+            confirmedProcessExitReason = confirmedExit,
             lastKnownError = preferencesManager.lastKnownError,
             logRetentionDays = preferencesManager.logRetentionDays,
             lastCleanupTimestamp = preferencesManager.lastCleanupTimestamp,

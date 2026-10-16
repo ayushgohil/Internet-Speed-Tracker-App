@@ -107,4 +107,45 @@ object NetworkUtils {
             }
         }
     }
+
+    /**
+     * Retrieves the confirmed OS process exit reason using ActivityManager.getHistoricalProcessExitReasons
+     * on Android 11+ (API 30+). Unlike component lifecycle callbacks, this inspects confirmed
+     * Linux / ActivityManager kernel-level termination records.
+     */
+    fun getConfirmedProcessExitReason(context: Context): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return "Unavailable (Requires Android 11+)"
+        }
+        return try {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                ?: return "Unknown (ActivityManager unavailable)"
+            val exitList = activityManager.getHistoricalProcessExitReasons(context.packageName, 0, 1)
+            if (exitList.isEmpty()) {
+                return "None recorded"
+            }
+            val exitInfo = exitList[0]
+            val reasonStr = when (exitInfo.reason) {
+                android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "Confirmed: Low Memory Killer (LMK)"
+                android.app.ApplicationExitInfo.REASON_CRASH -> "Confirmed: Uncaught Java Exception"
+                android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "Confirmed: Native Crash (SIGSEGV/SIGABRT)"
+                android.app.ApplicationExitInfo.REASON_ANR -> "Confirmed: Application Not Responding (ANR)"
+                android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "Confirmed: User Action (Force Stop / Swiped)"
+                android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "Confirmed: User Stopped (OS Multi-user / Profile)"
+                android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Confirmed: Excessive Resource Usage (OS Policy Kill)"
+                android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "Confirmed: Permission Revocation Kill"
+                android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "Confirmed: App Initialization Failure"
+                android.app.ApplicationExitInfo.REASON_OTHER -> "Confirmed: System Termination"
+                else -> "Confirmed: Reason Code ${exitInfo.reason}"
+            }
+            val desc = exitInfo.description
+            if (!desc.isNullOrBlank()) {
+                "$reasonStr - $desc"
+            } else {
+                reasonStr
+            }
+        } catch (e: Exception) {
+            "Error querying exit reasons: ${e.message}"
+        }
+    }
 }
