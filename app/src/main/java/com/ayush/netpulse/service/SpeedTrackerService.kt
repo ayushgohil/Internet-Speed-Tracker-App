@@ -316,17 +316,6 @@ class SpeedTrackerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val stopIntent = Intent(this, SpeedTrackerService::class.java).apply {
-            action = ACTION_STOP
-            putExtra(EXTRA_STOP_REASON, "Stopped via notification action")
-        }
-        val pendingStop = PendingIntent.getService(
-            this,
-            1,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         val hasUsagePermission = NetworkUtils.hasUsageStatsPermission(this)
         val todayStr = NetworkUtils.formatDateString()
 
@@ -339,29 +328,45 @@ class SpeedTrackerService : Service() {
         val usageSummary = if (hasUsagePermission) {
             "Mobile: ${NetworkUtils.formatBytes(mobileBytes)}    Wi-Fi: ${NetworkUtils.formatBytes(wifiBytes)}"
         } else {
-            "Usage access required for daily totals"
+            "Connection: ${networkType.displayName}"
         }
 
-        val expandedStyle = NotificationCompat.InboxStyle()
-            .addLine(speedTitle)
-            .addLine("Today's Mobile: ${if (hasUsagePermission) NetworkUtils.formatBytes(mobileBytes) else "Unavailable"}")
-            .addLine("Today's Wi-Fi: ${if (hasUsagePermission) NetworkUtils.formatBytes(wifiBytes) else "Unavailable"}")
-            .addLine("Today's Total: ${if (hasUsagePermission) NetworkUtils.formatBytes(totalBytes) else "Unavailable"}")
-            .addLine("Connection: ${networkType.displayName}")
+        val isDetailed = (preferencesManager.notificationStyle == "Detailed")
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(speedTitle)
             .setContentText(usageSummary)
-            .setStyle(expandedStyle)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setContentIntent(pendingOpenApp)
-            .addAction(0, "Stop", pendingStop)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .build()
+
+        if (isDetailed) {
+            val stopIntent = Intent(this, SpeedTrackerService::class.java).apply {
+                action = ACTION_STOP
+                putExtra(EXTRA_STOP_REASON, "Stopped via notification action")
+            }
+            val pendingStop = PendingIntent.getService(
+                this,
+                1,
+                stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val expandedStyle = NotificationCompat.InboxStyle()
+                .addLine("Today's Mobile: ${if (hasUsagePermission) NetworkUtils.formatBytes(mobileBytes) else "Unavailable"}")
+                .addLine("Today's Wi-Fi: ${if (hasUsagePermission) NetworkUtils.formatBytes(wifiBytes) else "Unavailable"}")
+                .addLine("Today's Total: ${if (hasUsagePermission) NetworkUtils.formatBytes(totalBytes) else "Unavailable"}")
+                .addLine("Connection: ${networkType.displayName}")
+
+            builder.setStyle(expandedStyle)
+            builder.addAction(0, "Stop", pendingStop)
+        }
+
+        return builder.build()
     }
 
     private fun stopForegroundMonitoring(reason: String = "Stopped by user") {
@@ -396,17 +401,6 @@ class SpeedTrackerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val stopIntent = Intent(this, SpeedTrackerService::class.java).apply {
-            action = ACTION_STOP
-            putExtra(EXTRA_STOP_REASON, "Stopped via notification action")
-        }
-        val pendingStop = PendingIntent.getService(
-            this,
-            1,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         val hasUsagePermission = NetworkUtils.hasUsageStatsPermission(this)
         val todayStr = NetworkUtils.formatDateString()
 
@@ -423,28 +417,42 @@ class SpeedTrackerService : Service() {
         val usageSummary = if (hasUsagePermission) {
             "Mobile: ${NetworkUtils.formatBytes(mobileBytes)}    Wi-Fi: ${NetworkUtils.formatBytes(wifiBytes)}"
         } else {
-            "Usage access required for daily totals"
+            "Connection: ${networkType.displayName}"
         }
 
-        // Expanded view lines
-        val expandedStyle = NotificationCompat.InboxStyle()
-            .addLine(speedTitle)
-            .addLine("Today's Mobile: ${if (hasUsagePermission) NetworkUtils.formatBytes(mobileBytes) else "Unavailable"}")
-            .addLine("Today's Wi-Fi: ${if (hasUsagePermission) NetworkUtils.formatBytes(wifiBytes) else "Unavailable"}")
-            .addLine("Today's Total: ${if (hasUsagePermission) NetworkUtils.formatBytes(totalBytes) else "Unavailable"}")
-            .addLine("Connection: ${networkType.displayName}")
+        val isDetailed = (preferencesManager.notificationStyle == "Detailed")
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(speedTitle)
             .setContentText(usageSummary)
-            .setStyle(expandedStyle)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setContentIntent(pendingOpenApp)
-            .addAction(0, "Stop", pendingStop)
+
+        if (isDetailed) {
+            val stopIntent = Intent(this, SpeedTrackerService::class.java).apply {
+                action = ACTION_STOP
+                putExtra(EXTRA_STOP_REASON, "Stopped via notification action")
+            }
+            val pendingStop = PendingIntent.getService(
+                this,
+                1,
+                stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val expandedStyle = NotificationCompat.InboxStyle()
+                .addLine("Today's Mobile: ${if (hasUsagePermission) NetworkUtils.formatBytes(mobileBytes) else "Unavailable"}")
+                .addLine("Today's Wi-Fi: ${if (hasUsagePermission) NetworkUtils.formatBytes(wifiBytes) else "Unavailable"}")
+                .addLine("Today's Total: ${if (hasUsagePermission) NetworkUtils.formatBytes(totalBytes) else "Unavailable"}")
+                .addLine("Connection: ${networkType.displayName}")
+
+            builder.setStyle(expandedStyle)
+            builder.addAction(0, "Stop", pendingStop)
+        }
 
         if (preferencesManager.showSpeedInStatusBar) {
             val speedIcon = SpeedIconGenerator.createSpeedIcon(speed.downloadBytesPerSec)

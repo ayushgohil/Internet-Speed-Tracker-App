@@ -479,8 +479,8 @@ fun SettingsScreen(
             text = {
                 Column {
                     listOf(
-                        "Minimal" to "Minimal (Speed & Network Type)",
-                        "Detailed" to "Detailed (Speed, Network & Today's Usage)"
+                        "Minimal" to "Minimal (Slim 2-line speed & daily usage)",
+                        "Detailed" to "Detailed (Expanded card with breakdown & Stop button)"
                     ).forEach { (styleKey, label) ->
                         val isSelected = uiState.notificationStyle == styleKey
                         Row(
