@@ -37,12 +37,17 @@ class DashboardViewModel(
 
     private var localMonitoringJob: Job? = null
     private var recordSaveCounter = 0
+    private val speedSmoother = com.ayush.netpulse.util.SpeedSmoother()
 
     init {
         // Observe network connection type
         viewModelScope.launch {
             repository.observeNetworkType().collect { netType ->
                 _uiState.update { it.copy(networkType = netType) }
+                // Notify smoother of network switch to prevent stale values across transports
+                val currentRaw = _uiState.value.liveSpeed
+                val smoothed = speedSmoother.smooth(currentRaw, netType)
+                _uiState.update { it.copy(liveSpeed = smoothed) }
             }
         }
 
@@ -73,12 +78,13 @@ class DashboardViewModel(
             }
         }
 
-        // Observe speed from foreground service when it is running
+        // Observe speed from authoritative liveSpeedState (piped through SpeedSmoother)
         viewModelScope.launch {
-            SpeedTrackerService.liveSpeedState.collect { speed ->
-                if (_uiState.value.isBackgroundServiceRunning) {
-                    _uiState.update { it.copy(liveSpeed = speed) }
-                }
+            SpeedTrackerService.liveSpeedState.collect { rawSpeed ->
+                val netType = _uiState.value.networkType
+                val smoothed = speedSmoother.smooth(rawSpeed, netType)
+                _uiState.update { it.copy(liveSpeed = smoothed) }
+                preferencesManager.lastDisplayedSpeedTimestamp = System.currentTimeMillis()
             }
         }
 
@@ -93,9 +99,13 @@ class DashboardViewModel(
             )
         }
 
-        // If background monitoring was previously enabled by user, restart the service
-        if (preferencesManager.isBackgroundMonitoringEnabled && !_uiState.value.isBackgroundServiceRunning) {
-            SpeedTrackerService.start(application)
+        // Single authoritative pipeline:
+        // If background monitoring is enabled by user, start the service.
+        // Never start concurrent local monitoring when background monitoring is requested.
+        if (preferencesManager.isBackgroundMonitoringEnabled) {
+            if (!SpeedTrackerService.isServiceRunningState.value) {
+                SpeedTrackerService.start(application)
+            }
         } else {
             startLocalMonitoring()
         }
@@ -158,6 +168,9 @@ class DashboardViewModel(
             logRetentionDays = preferencesManager.logRetentionDays,
             lastCleanupTimestamp = preferencesManager.lastCleanupTimestamp,
             lastNotificationUpdateTimestamp = preferencesManager.lastNotificationUpdateTimestamp,
+            lastAttemptedNotificationTimestamp = preferencesManager.lastAttemptedNotificationTimestamp,
+            lastDisplayedSpeedTimestamp = preferencesManager.lastDisplayedSpeedTimestamp,
+            lastNotificationException = preferencesManager.lastNotificationException,
             lastServiceDestroyTimestamp = preferencesManager.lastServiceDestroyTimestamp,
             serviceRestartCount = preferencesManager.serviceRestartCount,
             hasNotificationPermission = _uiState.value.hasNotificationPermission,
@@ -225,31 +238,38 @@ class DashboardViewModel(
 
     fun onResumeScreen() {
         refreshPermissionsAndUsage()
-        if (!_uiState.value.isBackgroundServiceRunning && _uiState.value.isMonitoringActive) {
+        if (!_uiState.value.isBackgroundServiceRunning && _uiState.value.isMonitoringActive && !preferencesManager.isBackgroundMonitoringEnabled) {
             startLocalMonitoring()
         }
     }
 
     fun onPauseScreen() {
-        if (!_uiState.value.isBackgroundServiceRunning) {
+        if (!_uiState.value.isBackgroundServiceRunning && !preferencesManager.isBackgroundMonitoringEnabled) {
             stopLocalMonitoring()
         }
     }
 
     private fun startLocalMonitoring() {
+        if (preferencesManager.isBackgroundMonitoringEnabled || SpeedTrackerService.isServiceRunningState.value) {
+            // Never run duplicate sampling loop if background service is active or requested
+            return
+        }
         localMonitoringJob?.cancel()
         repository.resetSpeedBaseline()
 
         localMonitoringJob = viewModelScope.launch {
             while (isActive) {
-                val speed = repository.sampleCurrentSpeed()
-                _uiState.update { it.copy(liveSpeed = speed) }
+                val rawSpeed = repository.sampleCurrentSpeed()
+                val netType = _uiState.value.networkType
+                val smoothed = speedSmoother.smooth(rawSpeed, netType)
+                _uiState.update { it.copy(liveSpeed = smoothed) }
                 preferencesManager.lastSpeedSampleTimestamp = System.currentTimeMillis()
+                preferencesManager.lastDisplayedSpeedTimestamp = System.currentTimeMillis()
 
                 recordSaveCounter++
-                if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || recordSaveCounter >= 3) {
+                if (rawSpeed.downloadBytesPerSec > 10240 || rawSpeed.uploadBytesPerSec > 10240 || recordSaveCounter >= 3) {
                     recordSaveCounter = 0
-                    repository.saveSpeedRecord(speed, _uiState.value.networkType)
+                    repository.saveSpeedRecord(rawSpeed, _uiState.value.networkType)
                 }
 
                 delay(1000)
@@ -260,8 +280,9 @@ class DashboardViewModel(
     private fun stopLocalMonitoring() {
         localMonitoringJob?.cancel()
         localMonitoringJob = null
-        repository.resetSpeedBaseline()
-        if (!_uiState.value.isBackgroundServiceRunning) {
+        speedSmoother.reset()
+        if (!SpeedTrackerService.isServiceRunningState.value && !preferencesManager.isBackgroundMonitoringEnabled) {
+            repository.resetSpeedBaseline()
             _uiState.update { it.copy(liveSpeed = LiveSpeed(0L, 0L)) }
         }
     }

@@ -27,13 +27,12 @@ class Phase8VerificationTest {
         // Kilobytes (< 1000 KB)
         assertEquals("12K", SpeedIconGenerator.formatCompactSpeed(12 * 1024L))
         assertEquals("128K", SpeedIconGenerator.formatCompactSpeed(128 * 1024L))
+        assertEquals("300K", SpeedIconGenerator.formatCompactSpeed(300 * 1024L))
         assertEquals("999K", SpeedIconGenerator.formatCompactSpeed(999 * 1024L))
 
-        // Megabytes (< 10 MB: single decimal)
-        assertEquals("1.2M", SpeedIconGenerator.formatCompactSpeed((1.2 * 1024 * 1024).toLong()))
-        assertEquals("5.6M", SpeedIconGenerator.formatCompactSpeed((5.6 * 1024 * 1024).toLong()))
-
-        // Megabytes (>= 10 MB: integer)
+        // Megabytes: rounded to whole integer to guarantee maximum font size & avoid tiny illegible decimals
+        assertEquals("1M", SpeedIconGenerator.formatCompactSpeed((1.2 * 1024 * 1024).toLong()))
+        assertEquals("6M", SpeedIconGenerator.formatCompactSpeed((5.6 * 1024 * 1024).toLong()))
         assertEquals("15M", SpeedIconGenerator.formatCompactSpeed(15 * 1024 * 1024L))
         assertEquals("120M", SpeedIconGenerator.formatCompactSpeed(120 * 1024 * 1024L))
     }

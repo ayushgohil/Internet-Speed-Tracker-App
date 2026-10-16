@@ -41,8 +41,11 @@ class NetworkRepository(
     private var lastTimestamp: Long = -1L
 
     /**
-     * Samples live speed using TrafficStats deltas
+     * Samples live speed using TrafficStats deltas.
+     * Synchronized to guarantee consistency across concurrent invocations.
+     * Correctly handles TrafficStats.UNSUPPORTED, elapsed time anomalies, and counter wrap/resets.
      */
+    @Synchronized
     fun sampleCurrentSpeed(): LiveSpeed {
         val currentRx = TrafficStats.getTotalRxBytes()
         val currentTx = TrafficStats.getTotalTxBytes()
@@ -59,8 +62,16 @@ class NetworkRepository(
             return LiveSpeed(0L, 0L, currentTime)
         }
 
+        // Handle counter reset or reboot (current count lower than baseline)
+        if (currentRx < lastRxBytes || currentTx < lastTxBytes) {
+            lastRxBytes = currentRx
+            lastTxBytes = currentTx
+            lastTimestamp = currentTime
+            return LiveSpeed(0L, 0L, currentTime)
+        }
+
         val elapsedMillis = currentTime - lastTimestamp
-        if (elapsedMillis <= 0) {
+        if (elapsedMillis <= 50) { // Discard micro-intervals (<50ms) to avoid division distortion
             return LiveSpeed(0L, 0L, currentTime)
         }
 
@@ -81,6 +92,7 @@ class NetworkRepository(
     /**
      * Resets delta baseline when tracking stops or resumes
      */
+    @Synchronized
     fun resetSpeedBaseline() {
         lastRxBytes = -1L
         lastTxBytes = -1L

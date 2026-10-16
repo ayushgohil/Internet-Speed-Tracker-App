@@ -648,6 +648,8 @@ private fun DiagnosticsContentCard(diagnostics: DiagnosticsInfo) {
             DiagRow("Service Status", diagnostics.resolvedServiceStatus, serviceStatusColor)
             DiagRow("Last Service Start", diagnostics.formatTimestamp(diagnostics.lastServiceStartTimestamp))
             DiagRow("Last Speed Sample", diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp))
+            DiagRow("Last Displayed Speed", diagnostics.formatTimestamp(diagnostics.lastDisplayedSpeedTimestamp))
+            DiagRow("Last Notification Attempt", diagnostics.formatTimestamp(diagnostics.lastAttemptedNotificationTimestamp))
             DiagRow("Last Notification Update", diagnostics.formatTimestamp(diagnostics.lastNotificationUpdateTimestamp))
             if (diagnostics.serviceRestartCount > 0) {
                 DiagRow("OS Restarts Count", "${diagnostics.serviceRestartCount} times", Cyan400)
@@ -659,6 +661,22 @@ private fun DiagnosticsContentCard(diagnostics: DiagnosticsInfo) {
                 "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
                 Slate400
             )
+
+            if (!diagnostics.lastNotificationException.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Rose500.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Notification Issue: ${diagnostics.lastNotificationException}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Rose500,
+                        fontSize = 11.sp
+                    )
+                }
+            }
 
             if (!diagnostics.lastKnownError.isNullOrBlank()) {
                 Box(

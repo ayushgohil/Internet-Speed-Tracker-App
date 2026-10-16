@@ -185,11 +185,25 @@ class SpeedTrackerService : Service() {
 
                     tickCount++
 
-                    // Efficient notification update
-                    val compactSpeed = SpeedIconGenerator.formatCompactSpeed(speed.downloadBytesPerSec)
+                    // Stable notification & status bar update:
+                    // Avoid spamming NotificationManager every 1s, which Android 13-15 throttles or silences.
+                    // Instead, update at a stable cadence (every 2.5 - 3 seconds) or immediately on transport change.
+                    val compactSpeed = if (preferencesManager.showSpeedInStatusBar) {
+                        SpeedIconGenerator.formatCompactSpeed(speed.downloadBytesPerSec)
+                    } else {
+                        "standard"
+                    }
                     val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}"
-                    if (signature != lastNotificationSignature || (isScreenInteractive && tickCount >= 4)) {
+                    val timeSinceLastNotif = now - lastNotificationUpdateTime
+
+                    if (signature != lastNotificationSignature && (timeSinceLastNotif >= 2500L || currentNetworkType != lastNotifiedNetworkType)) {
                         lastNotificationSignature = signature
+                        lastNotifiedNetworkType = currentNetworkType
+                        lastNotificationUpdateTime = now
+                        updateNotificationSafely(speed, currentNetworkType)
+                    } else if (isScreenInteractive && timeSinceLastNotif >= 5000L) {
+                        // Heartbeat notification refresh when screen is active
+                        lastNotificationUpdateTime = now
                         updateNotificationSafely(speed, currentNetworkType)
                     }
 
@@ -243,15 +257,71 @@ class SpeedTrackerService : Service() {
         }
     }
 
+    private var lastNotificationUpdateTime = 0L
+    private var lastNotifiedNetworkType: NetworkType? = null
+
     private fun updateNotificationSafely(speed: LiveSpeed, networkType: NetworkType) {
+        val now = System.currentTimeMillis()
+        preferencesManager.lastAttemptedNotificationTimestamp = now
         try {
             val notification = buildNotification(speed, networkType)
             notificationManager.notify(NOTIFICATION_ID, notification)
-            preferencesManager.lastNotificationUpdateTimestamp = System.currentTimeMillis()
+            preferencesManager.lastNotificationUpdateTimestamp = now
+            lastNotificationUpdateTime = now
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to update notification: ${e.message}")
-            preferencesManager.lastKnownError = "Notification update failed: ${e.message}"
+            val errorMsg = "NotificationManager exception (${e.javaClass.simpleName}): ${e.message}"
+            Log.w(TAG, errorMsg, e)
+            preferencesManager.lastNotificationException = errorMsg
+            preferencesManager.lastKnownError = errorMsg
+
+            // Fallback attempt: if failed with dynamic icon, try standard icon
+            try {
+                val fallback = buildFallbackNotification(speed, networkType)
+                notificationManager.notify(NOTIFICATION_ID, fallback)
+                preferencesManager.lastNotificationUpdateTimestamp = System.currentTimeMillis()
+            } catch (fallbackError: Exception) {
+                Log.e(TAG, "Fallback notification also failed: ${fallbackError.message}")
+            }
         }
+    }
+
+    private fun buildFallbackNotification(speed: LiveSpeed, networkType: NetworkType): Notification {
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingOpenApp = PendingIntent.getActivity(
+            this,
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val stopIntent = Intent(this, SpeedTrackerService::class.java).apply {
+            action = ACTION_STOP
+            putExtra(EXTRA_STOP_REASON, "Stopped via notification action")
+        }
+        val pendingStop = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val speedText = "↓ ${speed.formattedDownload}   ↑ ${speed.formattedUpload}"
+        val connectionText = networkType.displayName
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(speedText)
+            .setContentText(connectionText)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setContentIntent(pendingOpenApp)
+            .addAction(0, "Stop", pendingStop)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .build()
     }
 
     private fun stopForegroundMonitoring(reason: String = "Stopped by user") {

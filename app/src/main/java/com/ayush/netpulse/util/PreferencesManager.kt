@@ -52,6 +52,18 @@ class PreferencesManager(context: Context) {
         get() = prefs.getLong(KEY_LAST_NOTIFICATION_UPDATE_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_NOTIFICATION_UPDATE_TIMESTAMP, value).apply()
 
+    var lastAttemptedNotificationTimestamp: Long
+        get() = prefs.getLong(KEY_LAST_ATTEMPTED_NOTIFICATION_TIMESTAMP, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_ATTEMPTED_NOTIFICATION_TIMESTAMP, value).apply()
+
+    var lastDisplayedSpeedTimestamp: Long
+        get() = prefs.getLong(KEY_LAST_DISPLAYED_SPEED_TIMESTAMP, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_DISPLAYED_SPEED_TIMESTAMP, value).apply()
+
+    var lastNotificationException: String?
+        get() = prefs.getString(KEY_LAST_NOTIFICATION_EXCEPTION, null)
+        set(value) = prefs.edit().putString(KEY_LAST_NOTIFICATION_EXCEPTION, value).apply()
+
     var lastServiceDestroyTimestamp: Long
         get() = prefs.getLong(KEY_LAST_SERVICE_DESTROY_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_SERVICE_DESTROY_TIMESTAMP, value).apply()
@@ -85,6 +97,9 @@ class PreferencesManager(context: Context) {
         private const val KEY_LAST_KNOWN_ERROR = "key_last_known_error"
         private const val KEY_LAST_CLEANUP_TIMESTAMP = "key_last_cleanup_timestamp"
         private const val KEY_LAST_NOTIFICATION_UPDATE_TIMESTAMP = "key_last_notification_update_timestamp"
+        private const val KEY_LAST_ATTEMPTED_NOTIFICATION_TIMESTAMP = "key_last_attempted_notification_timestamp"
+        private const val KEY_LAST_DISPLAYED_SPEED_TIMESTAMP = "key_last_displayed_speed_timestamp"
+        private const val KEY_LAST_NOTIFICATION_EXCEPTION = "key_last_notification_exception"
         private const val KEY_LAST_SERVICE_DESTROY_TIMESTAMP = "key_last_service_destroy_timestamp"
         private const val KEY_SERVICE_RESTART_COUNT = "key_service_restart_count"
         private const val KEY_LAST_KNOWN_SERVICE_STATE = "key_last_known_service_state"
