@@ -1,5 +1,6 @@
 package com.ayush.netpulse.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -20,11 +21,11 @@ import com.ayush.netpulse.ui.dashboard.DashboardTab
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.logs.LogsTab
 import com.ayush.netpulse.ui.navigation.NavScreen
+import com.ayush.netpulse.ui.settings.SettingsScreen
 import com.ayush.netpulse.ui.theme.Cyan400
 import com.ayush.netpulse.ui.theme.DarkBackground
 import com.ayush.netpulse.ui.theme.DarkSurface
 import com.ayush.netpulse.ui.theme.Slate400
-import com.ayush.netpulse.ui.theme.Slate800
 import com.ayush.netpulse.ui.usage.UsageTab
 
 @Composable
@@ -38,76 +39,95 @@ fun MainScreen(
     onRefreshUsage: () -> Unit,
     onClearLogs: () -> Unit,
     onSetLogRetentionDays: (Int) -> Unit = {},
+    onToggleSpeedInStatusBar: () -> Unit = {},
+    onSetSpeedUnit: (String) -> Unit = {},
+    onReconcileUsage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentScreen by rememberSaveable { mutableStateOf(NavScreen.DASHBOARD) }
+    var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = DarkBackground,
-        bottomBar = {
-            NavigationBar(
-                containerColor = DarkSurface,
-                tonalElevation = 8.dp
-            ) {
-                NavScreen.values().forEach { screen ->
-                    val selected = currentScreen == screen
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { currentScreen = screen },
-                        icon = {
-                            Icon(
-                                imageVector = screen.icon,
-                                contentDescription = screen.title
+    if (isSettingsOpen) {
+        BackHandler { isSettingsOpen = false }
+        SettingsScreen(
+            uiState = uiState,
+            onBack = { isSettingsOpen = false },
+            onToggleBackgroundMonitoring = onToggleBackgroundService,
+            onToggleSpeedInStatusBar = onToggleSpeedInStatusBar,
+            onSetSpeedUnit = onSetSpeedUnit,
+            onRequestUsageAccess = onRequestUsageAccess,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onRequestBatteryOptimization = onRequestBatteryOptimization,
+            onSetRetentionDays = onSetLogRetentionDays,
+            onClearLogs = onClearLogs,
+            onReconcileUsage = onReconcileUsage,
+            modifier = modifier
+        )
+    } else {
+        Scaffold(
+            modifier = modifier.fillMaxSize(),
+            containerColor = DarkBackground,
+            bottomBar = {
+                NavigationBar(
+                    containerColor = DarkSurface,
+                    tonalElevation = 8.dp
+                ) {
+                    NavScreen.values().forEach { screen ->
+                        val selected = currentScreen == screen
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { currentScreen = screen },
+                            icon = {
+                                Icon(
+                                    imageVector = screen.icon,
+                                    contentDescription = screen.title
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = screen.title,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = DarkBackground,
+                                selectedTextColor = Cyan400,
+                                indicatorColor = Cyan400,
+                                unselectedIconColor = Slate400,
+                                unselectedTextColor = Slate400
                             )
-                        },
-                        label = {
-                            Text(
-                                text = screen.title,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = DarkBackground,
-                            selectedTextColor = Cyan400,
-                            indicatorColor = Cyan400,
-                            unselectedIconColor = Slate400,
-                            unselectedTextColor = Slate400
                         )
-                    )
+                    }
                 }
             }
-        }
-    ) { innerPadding ->
-        when (currentScreen) {
-            NavScreen.DASHBOARD -> {
-                DashboardTab(
-                    uiState = uiState,
-                    onToggleMonitoring = onToggleMonitoring,
-                    onToggleBackgroundService = onToggleBackgroundService,
-                    onRequestNotificationPermission = onRequestNotificationPermission,
-                    onRequestBatteryOptimization = onRequestBatteryOptimization,
-                    onNavigateToUsage = { currentScreen = NavScreen.USAGE },
-                    onNavigateToLogs = { currentScreen = NavScreen.LOGS },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            NavScreen.USAGE -> {
-                UsageTab(
-                    uiState = uiState,
-                    onRequestUsageAccess = onRequestUsageAccess,
-                    onRefreshUsage = onRefreshUsage,
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            NavScreen.LOGS -> {
-                LogsTab(
-                    records = uiState.recentRecords,
-                    retentionDays = uiState.diagnosticsInfo.logRetentionDays,
-                    onSetRetentionDays = onSetLogRetentionDays,
-                    onClearLogs = onClearLogs,
-                    modifier = Modifier.padding(innerPadding)
-                )
+        ) { innerPadding ->
+            when (currentScreen) {
+                NavScreen.DASHBOARD -> {
+                    DashboardTab(
+                        uiState = uiState,
+                        onToggleMonitoring = onToggleMonitoring,
+                        onToggleBackgroundService = onToggleBackgroundService,
+                        onNavigateToUsage = { currentScreen = NavScreen.USAGE },
+                        onNavigateToLogs = { currentScreen = NavScreen.LOGS },
+                        onOpenSettings = { isSettingsOpen = true },
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+                NavScreen.USAGE -> {
+                    UsageTab(
+                        uiState = uiState,
+                        onRequestUsageAccess = onRequestUsageAccess,
+                        onRefreshUsage = onRefreshUsage,
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+                NavScreen.LOGS -> {
+                    LogsTab(
+                        records = uiState.recentRecords,
+                        onClearLogs = onClearLogs,
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
             }
         }
     }

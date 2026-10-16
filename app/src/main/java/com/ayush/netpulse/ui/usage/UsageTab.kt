@@ -1,7 +1,11 @@
 package com.ayush.netpulse.ui.usage
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CellTower
@@ -20,28 +26,37 @@ import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalWifi4Bar
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.theme.Amber500
-import com.ayush.netpulse.ui.theme.Blue400
 import com.ayush.netpulse.ui.theme.Cyan400
 import com.ayush.netpulse.ui.theme.DarkBackground
 import com.ayush.netpulse.ui.theme.DarkCardBorder
@@ -49,8 +64,28 @@ import com.ayush.netpulse.ui.theme.DarkSurface
 import com.ayush.netpulse.ui.theme.Emerald400
 import com.ayush.netpulse.ui.theme.Slate400
 import com.ayush.netpulse.ui.theme.Slate600
+import com.ayush.netpulse.ui.theme.Slate700
 import com.ayush.netpulse.ui.theme.Slate800
-import com.ayush.netpulse.ui.theme.Slate900
+import com.ayush.netpulse.util.NetworkUtils
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+enum class UsageFilterType {
+    MOBILE,
+    WIFI,
+    TOTAL
+}
+
+data class DayHeatmapCell(
+    val dateStr: String,
+    val displayDate: String,
+    val dayOfWeek: Int, // 1 (Sun) .. 7 (Sat)
+    val monthName: String,
+    val isToday: Boolean,
+    val entity: DailyUsageEntity?
+)
 
 @Composable
 fun UsageTab(
@@ -59,13 +94,29 @@ fun UsageTab(
     onRefreshUsage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var selectedFilter by remember { mutableStateOf(UsageFilterType.TOTAL) }
+    var selectedDayDetail by remember { mutableStateOf<DayHeatmapCell?>(null) }
+
+    val daysList = remember(uiState.recentDailyRecords) {
+        generate90DaysGrid(uiState.recentDailyRecords)
+    }
+
+    if (!uiState.hasUsageAccessPermission) {
+        UsagePermissionRequiredCard(
+            onRequestUsageAccess = onRequestUsageAccess,
+            modifier = modifier
+        )
+        return
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .background(DarkBackground)
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // 1. Header
         item {
             Spacer(modifier = Modifier.height(10.dp))
             Row(
@@ -75,19 +126,19 @@ fun UsageTab(
             ) {
                 Column {
                     Text(
-                        text = "Data Usage",
+                        text = "Usage History",
                         style = MaterialTheme.typography.headlineLarge,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Android NetworkStatsManager Analytics",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Last 90 days • Android NetworkStatsManager",
+                        style = MaterialTheme.typography.bodySmall,
                         color = Slate400
                     )
                 }
 
-                if (uiState.isLoadingUsage) {
+                if (uiState.isLoadingUsage || uiState.isReconcilingUsage) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp,
@@ -96,276 +147,714 @@ fun UsageTab(
                 } else {
                     IconButton(
                         onClick = onRefreshUsage,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(DarkSurface)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh Usage",
+                            contentDescription = "Refresh",
                             tint = Cyan400,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
             }
         }
 
-        // Usage Permission Banner if not granted
-        if (!uiState.hasUsageAccessPermission) {
-            item {
-                UsagePermissionCard(onRequestUsageAccess = onRequestUsageAccess)
-            }
-        } else {
-            // Today's Usage Breakdown Cards
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    UsageMetricCard(
-                        title = "Today's Mobile",
-                        value = uiState.dailyUsage.formattedMobile,
-                        icon = Icons.Default.CellTower,
-                        accentColor = Blue400,
-                        modifier = Modifier.weight(1f)
-                    )
-                    UsageMetricCard(
-                        title = "Today's Wi-Fi",
-                        value = uiState.dailyUsage.formattedWifi,
-                        icon = Icons.Default.SignalWifi4Bar,
-                        accentColor = Cyan400,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            // Total Combined Today
-            item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Slate800, RoundedCornerShape(14.dp)),
-                    color = DarkSurface,
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Combined Consumption",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Total data consumed today",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Slate400
-                            )
-                        }
-                        Text(
-                            text = uiState.dailyUsage.formattedTotal,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Cyan400,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-
-        // Historical Daily Usage Section
+        // 2. Filter Chips: Mobile | Wi-Fi | Total
         item {
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Daily History (Room)",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    Pair(UsageFilterType.MOBILE, "Mobile"),
+                    Pair(UsageFilterType.WIFI, "Wi-Fi"),
+                    Pair(UsageFilterType.TOTAL, "Total")
+                ).forEach { (type, label) ->
+                    val isSelected = selectedFilter == type
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedFilter = type },
+                        label = {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (isSelected) DarkBackground else Color.White,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan400,
+                            containerColor = DarkSurface
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            borderColor = if (isSelected) Cyan400 else DarkCardBorder,
+                            selectedBorderColor = Cyan400
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                }
+            }
+        }
+
+        // 3. Calendar Heatmap Card (GitHub-Style 90-Day Contribution Grid)
+        item {
+            CalendarHeatmapCard(
+                daysList = daysList,
+                selectedFilter = selectedFilter,
+                onSelectCell = { cell -> selectedDayDetail = cell }
             )
         }
 
-        if (uiState.recentDailyRecords.isEmpty()) {
-            item {
-                EmptyUsageHistoryCard()
-            }
-        } else {
-            items(uiState.recentDailyRecords) { dailyRecord ->
-                DailyUsageRow(dailyUsage = dailyRecord)
-            }
+        // 4. Detailed Daily Usage Table (Last 90 days)
+        item {
+            Text(
+                text = "Daily Usage (Last 90 days)",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 2.dp, top = 4.dp)
+            )
+        }
+
+        // Table Header
+        item {
+            DailyTableHeaderRow()
+        }
+
+        // Table Rows
+        items(daysList.reversed()) { cell ->
+            DailyTableRow(
+                cell = cell,
+                onClick = { selectedDayDetail = cell }
+            )
+        }
+
+        // 5. Monthly Totals Summary Footer
+        item {
+            MonthlySummaryCard(daysList = daysList)
         }
 
         item {
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
-}
 
-@Composable
-private fun UsagePermissionCard(onRequestUsageAccess: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Amber500.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
-        color = Slate900,
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = null,
-                    tint = Amber500,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Usage Access Permission Required",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Android requires Usage Access to query system mobile and Wi-Fi data statistics.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate400
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onRequestUsageAccess,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Cyan400,
-                    contentColor = DarkBackground
-                ),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Grant Permission in Settings", fontWeight = FontWeight.Bold)
-            }
-        }
+    // Detail Breakdown Dialog
+    selectedDayDetail?.let { cell ->
+        UsageDetailDialog(
+            cell = cell,
+            onDismiss = { selectedDayDetail = null }
+        )
     }
 }
 
 @Composable
-private fun UsageMetricCard(
-    title: String,
-    value: String,
-    icon: ImageVector,
-    accentColor: Color,
-    modifier: Modifier = Modifier
+private fun CalendarHeatmapCard(
+    daysList: List<DayHeatmapCell>,
+    selectedFilter: UsageFilterType,
+    onSelectCell: (DayHeatmapCell) -> Unit
 ) {
-    Surface(
-        modifier = modifier
-            .border(1.dp, Slate800, RoundedCornerShape(14.dp)),
-        color = DarkSurface,
-        shape = RoundedCornerShape(14.dp)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = title,
+                    text = "Activity Heatmap",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "90 Days Overview",
                     style = MaterialTheme.typography.labelSmall,
                     color = Slate400
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Horizontally scrollable weeks grid
+            val scrollState = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(scrollState)
+            ) {
+                // Weekday labels column (Mon, Wed, Fri)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(end = 6.dp, top = 20.dp)
+                ) {
+                    listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { idx, day ->
+                        Text(
+                            text = if (idx % 2 == 0) day else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Slate600,
+                            fontSize = 9.sp,
+                            modifier = Modifier.size(13.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                // Grid of weeks
+                val weeks = remember(daysList) { chunkIntoWeeks(daysList) }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    weeks.forEach { week ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // Month label header if week is the start of a month
+                            val firstValidDay = week.firstOrNull { it != null }
+                            val monthLabel = if (firstValidDay?.dateStr?.endsWith("-01") == true ||
+                                (firstValidDay != null && week.indexOf(firstValidDay) == 0 && firstValidDay.dateStr.endsWith("-02"))
+                            ) {
+                                firstValidDay.monthName
+                            } else {
+                                ""
+                            }
+
+                            Text(
+                                text = monthLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Slate400,
+                                fontSize = 9.sp,
+                                modifier = Modifier
+                                    .height(14.dp)
+                                    .width(13.dp),
+                                maxLines = 1
+                            )
+
+                            // 7 days of the week
+                            for (dayIndex in 0 until 7) {
+                                val cell = week.getOrNull(dayIndex)
+                                if (cell != null) {
+                                    val bytes = when (selectedFilter) {
+                                        UsageFilterType.MOBILE -> cell.entity?.totalMobileBytes ?: 0L
+                                        UsageFilterType.WIFI -> cell.entity?.totalWifiBytes ?: 0L
+                                        UsageFilterType.TOTAL -> cell.entity?.totalAllBytes ?: 0L
+                                    }
+                                    val color = getHeatmapCellColor(cell.entity, bytes)
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(13.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(color)
+                                            .border(
+                                                width = if (cell.isToday) 1.dp else 0.dp,
+                                                color = if (cell.isToday) Cyan400 else Color.Transparent,
+                                                shape = RoundedCornerShape(2.dp)
+                                            )
+                                            .clickable { onSelectCell(cell) }
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.size(13.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Color scale legend: No data | Low | Med | High | Very high
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Less",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Slate600,
+                    fontSize = 10.sp
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LegendCell(color = Slate800)
+                    LegendCell(color = Color(0xFF1B4D3E))
+                    LegendCell(color = Color(0xFF2E7D32))
+                    LegendCell(color = Color(0xFF4CAF50))
+                    LegendCell(color = Color(0xFF69F0AE))
+                }
+
+                Text(
+                    text = "More",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Slate600,
+                    fontSize = 10.sp
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DailyUsageRow(dailyUsage: DailyUsageEntity) {
-    Surface(
+private fun LegendCell(color: Color) {
+    Box(
+        modifier = Modifier
+            .size(10.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(color)
+    )
+}
+
+private fun getHeatmapCellColor(entity: DailyUsageEntity?, bytes: Long): Color {
+    if (entity == null) return Slate800 // Neutral dark gray for unavailable/unrecorded days
+    if (bytes <= 0L) return Slate700 // Recorded 0 bytes
+
+    val mb = bytes / (1024.0 * 1024.0)
+    return when {
+        mb < 50.0 -> Color(0xFF1B4D3E)       // Level 1: Low (< 50 MB)
+        mb < 200.0 -> Color(0xFF2E7D32)      // Level 2: Medium (50 - 200 MB)
+        mb < 500.0 -> Color(0xFF4CAF50)      // Level 3: High (200 - 500 MB)
+        else -> Color(0xFF69F0AE)            // Level 4: Very High (> 500 MB)
+    }
+}
+
+@Composable
+private fun DailyTableHeaderRow() {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Slate800, RoundedCornerShape(12.dp)),
-        color = DarkSurface,
-        shape = RoundedCornerShape(12.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(DarkSurface)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = dailyUsage.date,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Total: ${dailyUsage.formattedTotal}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Cyan400
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "Mobile: ${dailyUsage.formattedMobile}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Blue400,
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = "Wi-Fi: ${dailyUsage.formattedWifi}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Emerald400,
-                    fontSize = 12.sp
-                )
-            }
-        }
+        Text(
+            text = "Date",
+            style = MaterialTheme.typography.labelMedium,
+            color = Slate400,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1.3f)
+        )
+        Text(
+            text = "Mobile",
+            style = MaterialTheme.typography.labelMedium,
+            color = Slate400,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "Wi-Fi",
+            style = MaterialTheme.typography.labelMedium,
+            color = Slate400,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "Total",
+            style = MaterialTheme.typography.labelMedium,
+            color = Slate400,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1.1f)
+        )
     }
 }
 
 @Composable
-private fun EmptyUsageHistoryCard() {
+private fun DailyTableRow(
+    cell: DayHeatmapCell,
+    onClick: () -> Unit
+) {
+    val entity = cell.entity
+    val isToday = cell.isToday
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isToday) Cyan400.copy(alpha = 0.08f) else DarkSurface.copy(alpha = 0.5f))
+            .border(
+                1.dp,
+                if (isToday) Cyan400.copy(alpha = 0.35f) else DarkCardBorder.copy(alpha = 0.5f),
+                RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Date Column
+        Column(modifier = Modifier.weight(1.3f)) {
+            Text(
+                text = if (isToday) "Today" else cell.displayDate,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isToday) Cyan400 else Color.White,
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium
+            )
+        }
+
+        // Mobile Data Column
+        Text(
+            text = if (entity != null) entity.formattedMobile else "—",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (entity != null && entity.totalMobileBytes > 0) Emerald400 else Slate400,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
+
+        // Wi-Fi Column
+        Text(
+            text = if (entity != null) entity.formattedWifi else "—",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (entity != null && entity.totalWifiBytes > 0) Cyan400 else Slate400,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
+
+        // Total Column
+        Text(
+            text = if (entity != null) entity.formattedTotal else "—",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (entity != null && entity.totalAllBytes > 0) Color.White else Slate600,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1.1f)
+        )
+    }
+}
+
+@Composable
+private fun MonthlySummaryCard(daysList: List<DayHeatmapCell>) {
+    var totalMobile = 0L
+    var totalWifi = 0L
+    var activeDays = 0
+
+    daysList.forEach { cell ->
+        cell.entity?.let {
+            totalMobile += it.totalMobileBytes
+            totalWifi += it.totalWifiBytes
+            if (it.totalAllBytes > 0) activeDays++
+        }
+    }
+    val combinedTotal = totalMobile + totalWifi
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(14.dp)),
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(14.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.DataUsage,
-                contentDescription = null,
-                tint = Slate600,
-                modifier = Modifier.size(36.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "No daily history recorded yet.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate400
+                text = "90-Day Usage Summary",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
             )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                SummaryItem(title = "Mobile Data", value = NetworkUtils.formatBytes(totalMobile), color = Emerald400)
+                SummaryItem(title = "Wi-Fi Data", value = NetworkUtils.formatBytes(totalWifi), color = Cyan400)
+                SummaryItem(title = "Combined Total", value = NetworkUtils.formatBytes(combinedTotal), color = Color.White)
+            }
         }
     }
+}
+
+@Composable
+private fun SummaryItem(title: String, value: String, color: Color) {
+    Column {
+        Text(text = title, style = MaterialTheme.typography.labelSmall, color = Slate400)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = value, style = MaterialTheme.typography.bodyLarge, color = color, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun UsageDetailDialog(
+    cell: DayHeatmapCell,
+    onDismiss: () -> Unit
+) {
+    val entity = cell.entity
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = "Usage Details",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = cell.displayDate,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Cyan400
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (entity == null) {
+                    Text(
+                        text = "Historical statistics were not recorded or are unavailable from the Android operating system for this date.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Slate400
+                    )
+                } else {
+                    // Mobile Data Breakdown
+                    UsageDetailSection(
+                        title = "Mobile Data",
+                        icon = Icons.Default.CellTower,
+                        accentColor = Emerald400,
+                        total = entity.formattedMobile,
+                        rx = NetworkUtils.formatBytes(entity.mobileRxBytes),
+                        tx = NetworkUtils.formatBytes(entity.mobileTxBytes)
+                    )
+
+                    HorizontalDivider(color = DarkCardBorder)
+
+                    // Wi-Fi Breakdown
+                    UsageDetailSection(
+                        title = "Wi-Fi Data",
+                        icon = Icons.Default.SignalWifi4Bar,
+                        accentColor = Cyan400,
+                        total = entity.formattedWifi,
+                        rx = NetworkUtils.formatBytes(entity.wifiRxBytes),
+                        tx = NetworkUtils.formatBytes(entity.wifiTxBytes)
+                    )
+
+                    HorizontalDivider(color = DarkCardBorder)
+
+                    // Combined
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Combined Total",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = entity.formattedTotal,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Close", color = Cyan400)
+            }
+        },
+        containerColor = DarkSurface
+    )
+}
+
+@Composable
+private fun UsageDetailSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accentColor: Color,
+    total: String,
+    rx: String,
+    tx: String
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = title, style = MaterialTheme.typography.bodyMedium, color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+            Text(text = total, style = MaterialTheme.typography.bodyMedium, color = accentColor, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 22.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = "↓ Download: $rx", style = MaterialTheme.typography.bodySmall, color = Slate400)
+            Text(text = "↑ Upload: $tx", style = MaterialTheme.typography.bodySmall, color = Slate400)
+        }
+    }
+}
+
+@Composable
+private fun UsagePermissionRequiredCard(
+    onRequestUsageAccess: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp)),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Amber500.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Permission Required",
+                        tint = Amber500,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Usage Access Required",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Android requires the 'Usage Access' permission to query NetworkStatsManager for daily Wi-Fi and mobile data statistics.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Slate400,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = onRequestUsageAccess,
+                    colors = ButtonDefaults.buttonColors(containerColor = Cyan400),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Grant Usage Access",
+                        color = DarkBackground,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Generates an ordered 90-day sequence from 89 days ago up to today,
+ * mapped to any existing DailyUsageEntity in Room.
+ */
+private fun generate90DaysGrid(existingRecords: List<DailyUsageEntity>): List<DayHeatmapCell> {
+    val recordsMap = existingRecords.associateBy { it.date }
+    val displaySdf = SimpleDateFormat("dd MMM", Locale.getDefault())
+    val monthSdf = SimpleDateFormat("MMM", Locale.getDefault())
+
+    val todayCalendar = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+
+    val result = ArrayList<DayHeatmapCell>(90)
+
+    for (offset in 89 downTo 0) {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = todayCalendar.timeInMillis
+            add(Calendar.DAY_OF_YEAR, -offset)
+        }
+        val dateStr = NetworkUtils.formatDateString(cal.timeInMillis)
+        val entity = recordsMap[dateStr]
+
+        result.add(
+            DayHeatmapCell(
+                dateStr = dateStr,
+                displayDate = displaySdf.format(cal.time),
+                dayOfWeek = cal.get(Calendar.DAY_OF_WEEK),
+                monthName = monthSdf.format(cal.time),
+                isToday = (offset == 0),
+                entity = entity
+            )
+        )
+    }
+
+    return result
+}
+
+/**
+ * Organizes days into 7-day columns (weeks) for the contribution grid
+ */
+private fun chunkIntoWeeks(days: List<DayHeatmapCell>): List<List<DayHeatmapCell?>> {
+    val weeks = mutableListOf<MutableList<DayHeatmapCell?>>()
+    var currentWeek = MutableList<DayHeatmapCell?>(7) { null }
+
+    days.forEach { day ->
+        // Convert Calendar.DAY_OF_WEEK (Sun=1..Sat=7) to Monday-based index (Mon=0..Sun=6)
+        val mondayBasedDayIndex = when (day.dayOfWeek) {
+            Calendar.MONDAY -> 0
+            Calendar.TUESDAY -> 1
+            Calendar.WEDNESDAY -> 2
+            Calendar.THURSDAY -> 3
+            Calendar.FRIDAY -> 4
+            Calendar.SATURDAY -> 5
+            Calendar.SUNDAY -> 6
+            else -> 0
+        }
+
+        currentWeek[mondayBasedDayIndex] = day
+
+        // When Sunday (6) is filled or we reached the end
+        if (mondayBasedDayIndex == 6) {
+            weeks.add(currentWeek)
+            currentWeek = MutableList(7) { null }
+        }
+    }
+
+    if (currentWeek.any { it != null }) {
+        weeks.add(currentWeek)
+    }
+
+    return weeks
 }

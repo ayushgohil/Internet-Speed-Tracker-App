@@ -16,7 +16,7 @@ interface DailyUsageDao {
     suspend fun getUsageForDate(date: String): DailyUsageEntity?
 
     @Query("SELECT * FROM daily_usage ORDER BY date DESC LIMIT :limit")
-    fun getRecentDailyUsage(limit: Int = 7): Flow<List<DailyUsageEntity>>
+    fun getRecentDailyUsage(limit: Int = 90): Flow<List<DailyUsageEntity>>
 
     @Query("SELECT * FROM daily_usage ORDER BY date DESC")
     fun getAllDailyUsage(): Flow<List<DailyUsageEntity>>

@@ -61,7 +61,10 @@ class MainActivity : ComponentActivity() {
                     },
                     onRefreshUsage = { viewModel.loadDailyDataUsage(forceReconcile = true) },
                     onClearLogs = { viewModel.clearLogs() },
-                    onSetLogRetentionDays = { days -> viewModel.setLogRetentionDays(days) }
+                    onSetLogRetentionDays = { days -> viewModel.setLogRetentionDays(days) },
+                    onToggleSpeedInStatusBar = { viewModel.toggleShowSpeedInStatusBar() },
+                    onSetSpeedUnit = { unit -> viewModel.setSpeedUnitPreference(unit) },
+                    onReconcileUsage = { viewModel.triggerManualReconciliation() }
                 )
             }
         }

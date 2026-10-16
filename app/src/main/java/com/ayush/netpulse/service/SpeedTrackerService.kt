@@ -19,6 +19,7 @@ import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.ui.MainActivity
 import com.ayush.netpulse.util.PreferencesManager
+import com.ayush.netpulse.util.SpeedIconGenerator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -185,7 +186,8 @@ class SpeedTrackerService : Service() {
                     tickCount++
 
                     // Efficient notification update
-                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}"
+                    val compactSpeed = SpeedIconGenerator.formatCompactSpeed(speed.downloadBytesPerSec)
+                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}"
                     if (signature != lastNotificationSignature || (isScreenInteractive && tickCount >= 4)) {
                         lastNotificationSignature = signature
                         updateNotificationSafely(speed, currentNetworkType)
@@ -298,8 +300,7 @@ class SpeedTrackerService : Service() {
         val speedText = "↓ ${speed.formattedDownload}   ↑ ${speed.formattedUpload}"
         val connectionText = networkType.displayName
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(speedText)
             .setContentText(connectionText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -309,7 +310,19 @@ class SpeedTrackerService : Service() {
             .setSilent(true)
             .setContentIntent(pendingOpenApp)
             .addAction(0, "Stop", pendingStop)
-            .build()
+
+        if (preferencesManager.showSpeedInStatusBar) {
+            val speedIcon = SpeedIconGenerator.createSpeedIcon(speed.downloadBytesPerSec)
+            if (speedIcon != null) {
+                builder.setSmallIcon(speedIcon)
+            } else {
+                builder.setSmallIcon(R.drawable.ic_launcher_foreground)
+            }
+        } else {
+            builder.setSmallIcon(R.drawable.ic_launcher_foreground)
+        }
+
+        return builder.build()
     }
 
     private fun createNotificationChannel() {

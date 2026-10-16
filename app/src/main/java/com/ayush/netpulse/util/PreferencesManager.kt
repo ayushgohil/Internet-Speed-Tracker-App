@@ -64,6 +64,14 @@ class PreferencesManager(context: Context) {
         get() = prefs.getString(KEY_LAST_KNOWN_SERVICE_STATE, "Stopped") ?: "Stopped"
         set(value) = prefs.edit().putString(KEY_LAST_KNOWN_SERVICE_STATE, value).apply()
 
+    var showSpeedInStatusBar: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_SPEED_IN_STATUS_BAR, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_SPEED_IN_STATUS_BAR, value).apply()
+
+    var speedUnitPreference: String
+        get() = prefs.getString(KEY_SPEED_UNIT_PREFERENCE, "Auto") ?: "Auto"
+        set(value) = prefs.edit().putString(KEY_SPEED_UNIT_PREFERENCE, value).apply()
+
     companion object {
         private const val PREFS_NAME = "netpulse_preferences"
         private const val KEY_BACKGROUND_MONITORING = "key_background_monitoring"
@@ -80,6 +88,8 @@ class PreferencesManager(context: Context) {
         private const val KEY_LAST_SERVICE_DESTROY_TIMESTAMP = "key_last_service_destroy_timestamp"
         private const val KEY_SERVICE_RESTART_COUNT = "key_service_restart_count"
         private const val KEY_LAST_KNOWN_SERVICE_STATE = "key_last_known_service_state"
+        private const val KEY_SHOW_SPEED_IN_STATUS_BAR = "key_show_speed_in_status_bar"
+        private const val KEY_SPEED_UNIT_PREFERENCE = "key_speed_unit_preference"
 
         @Volatile
         private var INSTANCE: PreferencesManager? = null

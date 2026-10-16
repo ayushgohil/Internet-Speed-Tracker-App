@@ -20,5 +20,8 @@ data class DashboardUiState(
     val recentRecords: List<SpeedRecordEntity> = emptyList(),
     val diagnosticsInfo: DiagnosticsInfo = DiagnosticsInfo(),
     val isLoadingUsage: Boolean = false,
-    val usageErrorMessage: String? = null
+    val usageErrorMessage: String? = null,
+    val showSpeedInStatusBar: Boolean = false,
+    val speedUnitPreference: String = "Auto",
+    val isReconcilingUsage: Boolean = false
 )

@@ -22,26 +22,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SignalWifi4Bar
 import androidx.compose.material.icons.filled.SignalWifiOff
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -50,186 +42,357 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ayush.netpulse.data.model.DiagnosticsInfo
 import com.ayush.netpulse.data.model.NetworkType
-import com.ayush.netpulse.ui.theme.Amber500
 import com.ayush.netpulse.ui.theme.Blue400
 import com.ayush.netpulse.ui.theme.Cyan400
 import com.ayush.netpulse.ui.theme.DarkBackground
 import com.ayush.netpulse.ui.theme.DarkCardBorder
 import com.ayush.netpulse.ui.theme.DarkSurface
 import com.ayush.netpulse.ui.theme.Emerald400
-import com.ayush.netpulse.ui.theme.Rose500
 import com.ayush.netpulse.ui.theme.Slate400
 import com.ayush.netpulse.ui.theme.Slate600
-import com.ayush.netpulse.ui.theme.Slate700
 import com.ayush.netpulse.ui.theme.Slate800
-import com.ayush.netpulse.ui.theme.Slate900
 
 @Composable
 fun DashboardTab(
     uiState: DashboardUiState,
-    onToggleMonitoring: () -> Unit,
+    onToggleMonitoring: () -> Unit = {},
     onToggleBackgroundService: () -> Unit,
-    onRequestNotificationPermission: () -> Unit,
-    onRequestBatteryOptimization: () -> Unit,
     onNavigateToUsage: () -> Unit,
     onNavigateToLogs: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .background(DarkBackground)
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // 1. HEADER WITH NETPULSE TITLE, MONITORING CHIP, AND SETTINGS ICON
         item {
             Spacer(modifier = Modifier.height(10.dp))
-            HeaderSection(
-                isMonitoring = uiState.isMonitoringActive,
-                isBackgroundActive = uiState.isBackgroundServiceRunning,
-                onToggle = onToggleMonitoring
+            DashboardHeader(
+                isMonitoringActive = uiState.isBackgroundServiceRunning || uiState.isMonitoringActive,
+                onToggleMonitoring = onToggleMonitoring,
+                onOpenSettings = onOpenSettings
             )
         }
 
-        // Notification Permission Prompt (Android 13+)
-        if (!uiState.hasNotificationPermission) {
-            item {
-                NotificationPermissionCard(onRequestPermission = onRequestNotificationPermission)
-            }
+        // 2. SPEED HERO CARDS (PROMINENT CURRENT DOWNLOAD & UPLOAD SPEED)
+        item {
+            SpeedDualCard(
+                downloadFormatted = uiState.liveSpeed.formattedDownload,
+                uploadFormatted = uiState.liveSpeed.formattedUpload
+            )
         }
 
-        // Status Bar Persistent Service Switch
+        // 3. CURRENT NETWORK CONNECTION
         item {
-            BackgroundServiceCard(
+            NetworkConnectionBar(networkType = uiState.networkType)
+        }
+
+        // 4. BACKGROUND MONITORING ON/OFF CONTROL
+        item {
+            BackgroundMonitoringControlCard(
                 isRunning = uiState.isBackgroundServiceRunning,
                 onToggle = onToggleBackgroundService
             )
         }
 
-        // Battery Optimization Warning (if not whitelisted)
-        if (!uiState.isBatteryOptimizationIgnored && uiState.isBackgroundServiceRunning) {
-            item {
-                BatteryOptimizationCard(onConfigureBattery = onRequestBatteryOptimization)
-            }
-        }
-
-        // Connection Status Card
+        // 5. TODAY'S USAGE (MOBILE & WI-FI SIDE-BY-SIDE)
         item {
-            NetworkStatusCard(networkType = uiState.networkType)
-        }
-
-        // Live Speed Hero Card
-        item {
-            LiveSpeedHeroCard(uiState = uiState)
-        }
-
-        // Quick Summary Cards (Links to Usage and Logs)
-        item {
+            Text(
+                text = "Today's Usage",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 2.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                QuickNavCard(
-                    title = "Today's Usage",
-                    subtitle = uiState.dailyUsage.formattedTotal,
-                    detail = "Tap to view breakdown",
-                    icon = Icons.Default.DataUsage,
-                    accentColor = Cyan400,
+                TodayDataCard(
+                    title = "Mobile Data",
+                    usageFormatted = uiState.dailyUsage.formattedMobile,
+                    icon = Icons.Default.CellTower,
+                    accentColor = Emerald400,
                     onClick = onNavigateToUsage,
                     modifier = Modifier.weight(1f)
                 )
 
-                QuickNavCard(
-                    title = "Speed Logs",
-                    subtitle = "${uiState.recentRecords.size} samples",
-                    detail = "Tap to view history",
-                    icon = Icons.Default.History,
-                    accentColor = Blue400,
-                    onClick = onNavigateToLogs,
+                TodayDataCard(
+                    title = "Wi-Fi",
+                    usageFormatted = uiState.dailyUsage.formattedWifi,
+                    icon = Icons.Default.SignalWifi4Bar,
+                    accentColor = Cyan400,
+                    onClick = onNavigateToUsage,
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        // Diagnostics Section
+        // 6. COMPACT SHORTCUTS TO USAGE (LAST 90 DAYS) AND SPEED LOGS
         item {
-            DiagnosticsSection(diagnostics = uiState.diagnosticsInfo)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column {
+                    ShortcutRow(
+                        title = "View Usage History",
+                        subtitle = "Last 90 days heatmap & analytics",
+                        icon = Icons.Default.DataUsage,
+                        iconTint = Cyan400,
+                        onClick = onNavigateToUsage
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(DarkCardBorder)
+                    )
+
+                    ShortcutRow(
+                        title = "View Speed Logs",
+                        subtitle = "Detailed speed sample records",
+                        icon = Icons.Default.History,
+                        iconTint = Blue400,
+                        onClick = onNavigateToLogs
+                    )
+                }
+            }
         }
 
         item {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
 
 @Composable
-private fun HeaderSection(
-    isMonitoring: Boolean,
-    isBackgroundActive: Boolean,
-    onToggle: () -> Unit
+private fun DashboardHeader(
+    isMonitoringActive: Boolean,
+    onToggleMonitoring: () -> Unit = {},
+    onOpenSettings: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "NetPulse",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                val pulseColor by animateColorAsState(
-                    targetValue = if (isMonitoring) Emerald400 else Slate600,
-                    label = "pulseColor"
-                )
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(pulseColor)
-                )
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = when {
-                    isBackgroundActive -> "Status Bar Meter ON • Monitoring Active"
-                    isMonitoring -> "Screen Monitor Active"
-                    else -> "Monitoring Paused"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isBackgroundActive || isMonitoring) Emerald400 else Slate400
+                text = "NetPulse",
+                style = MaterialTheme.typography.headlineLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
             )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Compact Status Chip (Clickable to toggle)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (isMonitoringActive) Emerald400.copy(alpha = 0.15f) else Slate800)
+                    .clickable(onClick = onToggleMonitoring)
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val dotColor by animateColorAsState(
+                        targetValue = if (isMonitoringActive) Emerald400 else Slate600,
+                        label = "dotColor"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isMonitoringActive) "Monitoring Active" else "Paused",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isMonitoringActive) Emerald400 else Slate400,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
 
+        // Settings Icon Button
         IconButton(
-            onClick = onToggle,
+            onClick = onOpenSettings,
             modifier = Modifier
+                .size(40.dp)
                 .clip(CircleShape)
-                .background(if (isMonitoring) Slate800 else Cyan400)
+                .background(DarkSurface)
         ) {
             Icon(
-                imageVector = if (isMonitoring) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (isMonitoring) "Pause" else "Resume",
-                tint = if (isMonitoring) Color.White else DarkBackground
+                imageVector = Icons.Default.Settings,
+                contentDescription = "Settings",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
 @Composable
-private fun BackgroundServiceCard(
+private fun SpeedDualCard(
+    downloadFormatted: String,
+    uploadFormatted: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Download Speed Card
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .border(1.dp, Cyan400.copy(alpha = 0.3f), RoundedCornerShape(20.dp)),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Cyan400.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDownward,
+                            contentDescription = "Download",
+                            tint = Cyan400,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Download",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Slate400
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = downloadFormatted,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp
+                )
+            }
+        }
+
+        // Upload Speed Card
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp)),
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Emerald400.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowUpward,
+                            contentDescription = "Upload",
+                            tint = Emerald400,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Upload",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Slate400
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = uploadFormatted,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NetworkConnectionBar(networkType: NetworkType) {
+    val (icon, tint, label) = when (networkType) {
+        NetworkType.WIFI -> Triple(Icons.Default.SignalWifi4Bar, Cyan400, "Connected: Wi-Fi")
+        NetworkType.CELLULAR -> Triple(Icons.Default.CellTower, Emerald400, "Connected: Mobile Data")
+        NetworkType.ETHERNET -> Triple(Icons.Default.SignalWifi4Bar, Cyan400, "Connected: Ethernet")
+        NetworkType.DISCONNECTED -> Triple(Icons.Default.SignalWifiOff, Slate400, "Offline / Disconnected")
+        NetworkType.UNKNOWN -> Triple(Icons.Default.SignalWifi4Bar, Slate400, "Network Connecting...")
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(DarkSurface)
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (networkType == NetworkType.DISCONNECTED) Slate400 else Color.White,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun BackgroundMonitoringControlCard(
     isRunning: Boolean,
     onToggle: () -> Unit
 ) {
@@ -248,41 +411,22 @@ private fun BackgroundServiceCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Status Bar Live Meter",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    if (isRunning) {
-                        Text(
-                            text = "ACTIVE",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Emerald400,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(2.dp))
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                 Text(
-                    text = if (isRunning)
-                        "Shows continuous upload & download speeds in notification."
-                    else
-                        "Enable to show live speed meter in Android status bar.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Slate400,
-                    fontSize = 12.sp
+                    text = "Background Monitoring",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Keeps tracking even when app is closed",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Slate400
                 )
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
             Switch(
                 checked = isRunning,
                 onCheckedChange = { onToggle() },
@@ -298,514 +442,116 @@ private fun BackgroundServiceCard(
 }
 
 @Composable
-private fun NotificationPermissionCard(onRequestPermission: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Amber500.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = null,
-                    tint = Amber500,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Notification Permission Required",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontSize = 14.sp
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Android 13+ requires notification permission to display ongoing network speeds in the status bar.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate400,
-                fontSize = 12.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = onRequestPermission,
-                colors = ButtonDefaults.buttonColors(containerColor = Amber500, contentColor = DarkBackground),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Allow Notifications", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BatteryOptimizationCard(onConfigureBattery: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, Slate700, RoundedCornerShape(14.dp)),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.BatteryAlert,
-                    contentDescription = null,
-                    tint = Cyan400,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Background Reliability Advice",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontSize = 14.sp
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "OEMs (Samsung, Xiaomi, OnePlus) may stop background monitors while screen is locked. Setting battery to 'Unrestricted' prevents sleep interruptions.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate400,
-                fontSize = 12.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = onConfigureBattery,
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Configure Battery Settings", color = Cyan400, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun NetworkStatusCard(networkType: NetworkType) {
-    val (icon, tint, label) = when (networkType) {
-        NetworkType.WIFI -> Triple(Icons.Default.SignalWifi4Bar, Cyan400, "Connected via Wi-Fi")
-        NetworkType.CELLULAR -> Triple(Icons.Default.CellTower, Blue400, "Connected via Mobile Data")
-        NetworkType.ETHERNET -> Triple(Icons.Default.Speed, Emerald400, "Connected via Ethernet")
-        NetworkType.DISCONNECTED -> Triple(Icons.Default.SignalWifiOff, Rose500, "Disconnected from Internet")
-        NetworkType.UNKNOWN -> Triple(Icons.Default.Speed, Amber500, "Network Active")
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(tint.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = networkType.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Slate400
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LiveSpeedHeroCard(
-    uiState: DashboardUiState
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(Cyan400.copy(alpha = 0.35f), DarkCardBorder)
-                ),
-                shape = RoundedCornerShape(24.dp)
-            ),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(24.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "REAL-TIME SPEED",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Cyan400,
-                    letterSpacing = 1.5.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = when {
-                        uiState.isBackgroundServiceRunning -> "Status Bar active"
-                        uiState.isMonitoringActive -> "Active"
-                        else -> "Paused"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (uiState.isBackgroundServiceRunning || uiState.isMonitoringActive) Emerald400 else Slate400
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Download Speed
-                SpeedColumn(
-                    title = "DOWNLOAD",
-                    speedFormatted = if (uiState.isMonitoringActive || uiState.isBackgroundServiceRunning)
-                        uiState.liveSpeed.formattedDownload
-                    else
-                        "0.0 KB/s",
-                    icon = Icons.Default.ArrowDownward,
-                    color = Emerald400,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // Upload Speed
-                SpeedColumn(
-                    title = "UPLOAD",
-                    speedFormatted = if (uiState.isMonitoringActive || uiState.isBackgroundServiceRunning)
-                        uiState.liveSpeed.formattedUpload
-                    else
-                        "0.0 KB/s",
-                    icon = Icons.Default.ArrowUpward,
-                    color = Blue400,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpeedColumn(
+private fun TodayDataCard(
     title: String,
-    speedFormatted: String,
-    icon: ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .border(1.dp, Slate800, RoundedCornerShape(16.dp)),
-        color = Slate900.copy(alpha = 0.7f),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(color.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Slate400,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = speedFormatted,
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickNavCard(
-    title: String,
-    subtitle: String,
-    detail: String,
+    usageFormatted: String,
     icon: ImageVector,
     accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    Card(
         modifier = modifier
             .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp))
-            .clickable { onClick() },
-        color = DarkSurface,
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier.padding(14.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Slate400
+                    )
+                }
                 Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(20.dp)
-                )
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
                     tint = Slate600,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                color = Slate400
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.labelSmall,
-                color = accentColor,
-                fontSize = 11.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun DiagnosticsSection(diagnostics: DiagnosticsInfo) {
-    val serviceStatusColor = when (diagnostics.resolvedServiceStatus) {
-        "Active" -> Emerald400
-        "Stopped" -> Slate400
-        "Needs Permission" -> Amber500
-        else -> Rose500
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(18.dp)),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "System Diagnostics",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = Cyan400,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            DiagnosticItemRow(
-                label = "Monitoring",
-                value = if (diagnostics.isBackgroundMonitoringEnabled) "Enabled" else "Disabled",
-                valueColor = if (diagnostics.isBackgroundMonitoringEnabled) Cyan400 else Slate400
+            Text(
+                text = usageFormatted,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp
             )
-
-            DiagnosticItemRow(
-                label = "Last Known Service State",
-                value = diagnostics.resolvedServiceStatus,
-                valueColor = serviceStatusColor
-            )
-
-            if (diagnostics.isServiceStatePotentiallyStale) {
-                DiagnosticItemRow(
-                    label = "Service Health",
-                    value = "Stale (>45s idle)",
-                    valueColor = Amber500
-                )
-            }
-
-            DiagnosticItemRow(
-                label = "Last Service Start",
-                value = diagnostics.formatTimestamp(diagnostics.lastServiceStartTimestamp),
-                valueColor = Color.White
-            )
-
-            DiagnosticItemRow(
-                label = "Last Speed Measurement",
-                value = diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp),
-                valueColor = Color.White
-            )
-
-            DiagnosticItemRow(
-                label = "Last Notification Update",
-                value = diagnostics.formatTimestamp(diagnostics.lastNotificationUpdateTimestamp),
-                valueColor = Color.White
-            )
-
-            if (diagnostics.lastServiceDestroyTimestamp > 0L) {
-                DiagnosticItemRow(
-                    label = "Last Process Termination",
-                    value = diagnostics.formatTimestamp(diagnostics.lastServiceDestroyTimestamp),
-                    valueColor = Amber500
-                )
-            }
-
-            if (diagnostics.serviceRestartCount > 0) {
-                DiagnosticItemRow(
-                    label = "OS Restarts Count",
-                    value = "${diagnostics.serviceRestartCount} times",
-                    valueColor = Cyan400
-                )
-            }
-
-            DiagnosticItemRow(
-                label = "Historical Reconciliation",
-                value = diagnostics.formatTimestamp(diagnostics.lastReconciliationTimestamp),
-                valueColor = Color.White
-            )
-
-            DiagnosticItemRow(
-                label = "Reconciliation Status",
-                value = diagnostics.lastReconciliationStatus,
-                valueColor = if (diagnostics.lastReconciliationStatus.startsWith("Success")) Emerald400 else Slate400
-            )
-
-            DiagnosticItemRow(
-                label = "Usage Access",
-                value = if (diagnostics.hasUsageAccessPermission) "Granted" else "Needs Permission",
-                valueColor = if (diagnostics.hasUsageAccessPermission) Emerald400 else Amber500
-            )
-
-            DiagnosticItemRow(
-                label = "Notification Permission",
-                value = if (diagnostics.hasNotificationPermission) "Granted" else "Needs Permission",
-                valueColor = if (diagnostics.hasNotificationPermission) Emerald400 else Amber500
-            )
-
-            DiagnosticItemRow(
-                label = "Battery Optimization",
-                value = if (diagnostics.isBatteryOptimizationIgnored) "Unrestricted" else "Optimized",
-                valueColor = if (diagnostics.isBatteryOptimizationIgnored) Emerald400 else Amber500
-            )
-
-            DiagnosticItemRow(
-                label = "Android & Hardware",
-                value = "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
-                valueColor = Slate400
-            )
-
-            if (!diagnostics.lastKnownError.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Rose500.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Last Known Error: ${diagnostics.lastKnownError}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Rose500,
-                        fontSize = 11.sp
-                    )
-                }
-            }
         }
     }
 }
 
 @Composable
-private fun DiagnosticItemRow(
-    label: String,
-    value: String,
-    valueColor: Color
+private fun ShortcutRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconTint: Color,
+    onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Slate400,
-            fontSize = 12.sp,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = valueColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1.5f),
-            textAlign = TextAlign.End
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Slate400
+                )
+            }
+        }
+
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Slate600,
+            modifier = Modifier.size(20.dp)
         )
     }
 }

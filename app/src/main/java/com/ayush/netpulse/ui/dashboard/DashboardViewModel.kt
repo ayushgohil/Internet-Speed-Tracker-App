@@ -53,9 +53,9 @@ class DashboardViewModel(
             }
         }
 
-        // Observe recent Room daily usage records
+        // Observe recent Room daily usage records (up to 90 days)
         viewModelScope.launch {
-            repository.getRecentDailyUsage(7).collect { dailyRecords ->
+            repository.getRecentDailyUsage(90).collect { dailyRecords ->
                 _uiState.update { it.copy(recentDailyRecords = dailyRecords) }
             }
         }
@@ -84,6 +84,14 @@ class DashboardViewModel(
 
         // Initial permissions, usage, and diagnostics check
         refreshPermissionsAndUsage()
+
+        // Initial preferences state
+        _uiState.update {
+            it.copy(
+                showSpeedInStatusBar = preferencesManager.showSpeedInStatusBar,
+                speedUnitPreference = preferencesManager.speedUnitPreference
+            )
+        }
 
         // If background monitoring was previously enabled by user, restart the service
         if (preferencesManager.isBackgroundMonitoringEnabled && !_uiState.value.isBackgroundServiceRunning) {
@@ -268,6 +276,30 @@ class DashboardViewModel(
         preferencesManager.logRetentionDays = days
         com.ayush.netpulse.worker.LogRetentionWorker.triggerImmediate(getApplication())
         refreshDiagnostics()
+    }
+
+    fun toggleShowSpeedInStatusBar() {
+        val next = !preferencesManager.showSpeedInStatusBar
+        preferencesManager.showSpeedInStatusBar = next
+        _uiState.update { it.copy(showSpeedInStatusBar = next) }
+        val context = getApplication<Application>().applicationContext
+        if (_uiState.value.isBackgroundServiceRunning) {
+            SpeedTrackerService.start(context)
+        }
+    }
+
+    fun setSpeedUnitPreference(unit: String) {
+        preferencesManager.speedUnitPreference = unit
+        _uiState.update { it.copy(speedUnitPreference = unit) }
+    }
+
+    fun triggerManualReconciliation() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isReconcilingUsage = true) }
+            repository.reconcileMultiDayHistoricalUsage(90)
+            refreshDiagnostics()
+            _uiState.update { it.copy(isReconcilingUsage = false) }
+        }
     }
 
     override fun onCleared() {

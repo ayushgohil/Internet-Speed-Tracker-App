@@ -142,7 +142,7 @@ class NetworkRepository(
      * Reconciles usage for today, yesterday, and any missed calendar days up to maxLookbackDays.
      * Protects existing non-zero records from being overwritten with temporary zeros or delayed drops.
      */
-    suspend fun reconcileMultiDayHistoricalUsage(maxLookbackDays: Int = 14): Result<Int> = withContext(Dispatchers.IO) {
+    suspend fun reconcileMultiDayHistoricalUsage(maxLookbackDays: Int = 90): Result<Int> = withContext(Dispatchers.IO) {
         if (!NetworkUtils.hasUsageStatsPermission(context)) {
             val err = "Usage Access permission is not granted."
             preferencesManager.lastReconciliationStatus = "Failed: $err"
@@ -292,7 +292,7 @@ class NetworkRepository(
             val timeSinceLastReconciliation = now - preferencesManager.lastReconciledTimestamp
             // Reconcile multi-day history if requested, or if 15 minutes have elapsed since last check
             if (forceReconcile || timeSinceLastReconciliation > 15 * 60 * 1000L) {
-                reconcileMultiDayHistoricalUsage(maxLookbackDays = 7)
+                reconcileMultiDayHistoricalUsage(maxLookbackDays = 90)
             }
 
             val calendar = Calendar.getInstance().apply {
@@ -382,7 +382,7 @@ class NetworkRepository(
     /**
      * Flow of recent daily usage summaries from Room
      */
-    fun getRecentDailyUsage(limit: Int = 7): Flow<List<DailyUsageEntity>> {
+    fun getRecentDailyUsage(limit: Int = 90): Flow<List<DailyUsageEntity>> {
         return dailyUsageDao.getRecentDailyUsage(limit)
     }
 
