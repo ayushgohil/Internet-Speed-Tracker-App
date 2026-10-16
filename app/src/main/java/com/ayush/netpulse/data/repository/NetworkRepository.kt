@@ -348,16 +348,21 @@ class NetworkRepository(
                 Log.w("NetworkRepository", "Could not query Mobile data summary: ${e.message}")
             }
 
-            Result.success(
-                DataUsage(
-                    mobileRxBytes = mobileRx,
-                    mobileTxBytes = mobileTx,
-                    wifiRxBytes = wifiRx,
-                    wifiTxBytes = wifiTx,
-                    queryStartTime = startOfDay,
-                    queryEndTime = now
-                )
+            val todayUsage = DataUsage(
+                mobileRxBytes = mobileRx,
+                mobileTxBytes = mobileTx,
+                wifiRxBytes = wifiRx,
+                wifiTxBytes = wifiTx,
+                queryStartTime = startOfDay,
+                queryEndTime = now
             )
+
+            // Cache for fast and non-blocking notification rendering
+            preferencesManager.cachedTodayMobileBytes = todayUsage.totalMobileBytes
+            preferencesManager.cachedTodayWifiBytes = todayUsage.totalWifiBytes
+            preferencesManager.cachedTodayDate = NetworkUtils.formatDateString(now)
+
+            Result.success(todayUsage)
         } catch (e: Exception) {
             preferencesManager.lastKnownError = "Today usage query error: ${e.localizedMessage}"
             Result.failure(e)

@@ -185,6 +185,17 @@ class SpeedTrackerService : Service() {
                         lastPrefsWriteTimestamp = now
                     }
 
+                    // Periodic daily usage refresh (every 30s when active or immediately on date rollover)
+                    val todayStr = NetworkUtils.formatDateString(now)
+                    if (now - lastUsageRefreshTimestamp >= 30000L || preferencesManager.cachedTodayDate != todayStr) {
+                        lastUsageRefreshTimestamp = now
+                        if (NetworkUtils.hasUsageStatsPermission(this@SpeedTrackerService)) {
+                            serviceScope.launch(Dispatchers.IO) {
+                                repository.getTodayDataUsage(forceReconcile = false)
+                            }
+                        }
+                    }
+
                     tickCount++
 
                     // Stable notification & status bar update:
@@ -196,7 +207,9 @@ class SpeedTrackerService : Service() {
                         "standard"
                     }
                     val currentStyle = preferencesManager.notificationStyle
-                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle"
+                    val cachedMobile = preferencesManager.cachedTodayMobileBytes
+                    val cachedWifi = preferencesManager.cachedTodayWifiBytes
+                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
                     val timeSinceLastNotif = now - lastNotificationUpdateTime
 
                     if (signature != lastNotificationSignature && (timeSinceLastNotif >= 2500L || currentNetworkType != lastNotifiedNetworkType)) {
@@ -264,6 +277,7 @@ class SpeedTrackerService : Service() {
     }
 
     private var lastNotificationUpdateTime = 0L
+    private var lastUsageRefreshTimestamp = 0L
     private var lastNotifiedNetworkType: NetworkType? = null
 
     private fun updateNotificationSafely(speed: LiveSpeed, networkType: NetworkType) {
@@ -313,12 +327,32 @@ class SpeedTrackerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val speedText = "↓ ${speed.formattedDownload}   ↑ ${speed.formattedUpload}"
-        val connectionText = networkType.displayName
+        val hasUsagePermission = NetworkUtils.hasUsageStatsPermission(this)
+        val todayStr = NetworkUtils.formatDateString()
+
+        val isSameDay = (preferencesManager.cachedTodayDate == todayStr)
+        val mobileBytes = if (isSameDay) preferencesManager.cachedTodayMobileBytes else 0L
+        val wifiBytes = if (isSameDay) preferencesManager.cachedTodayWifiBytes else 0L
+        val totalBytes = mobileBytes + wifiBytes
+
+        val speedTitle = "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
+        val usageSummary = if (hasUsagePermission) {
+            "Mobile: ${NetworkUtils.formatBytes(mobileBytes)}    Wi-Fi: ${NetworkUtils.formatBytes(wifiBytes)}"
+        } else {
+            "Usage access required for daily totals"
+        }
+
+        val expandedStyle = NotificationCompat.InboxStyle()
+            .addLine(speedTitle)
+            .addLine("Today's Mobile: ${if (hasUsagePermission) NetworkUtils.formatBytes(mobileBytes) else "Unavailable"}")
+            .addLine("Today's Wi-Fi: ${if (hasUsagePermission) NetworkUtils.formatBytes(wifiBytes) else "Unavailable"}")
+            .addLine("Today's Total: ${if (hasUsagePermission) NetworkUtils.formatBytes(totalBytes) else "Unavailable"}")
+            .addLine("Connection: ${networkType.displayName}")
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(speedText)
-            .setContentText(connectionText)
+            .setContentTitle(speedTitle)
+            .setContentText(usageSummary)
+            .setStyle(expandedStyle)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
@@ -373,17 +407,37 @@ class SpeedTrackerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val speedText = "↓ ${speed.formattedDownload}   ↑ ${speed.formattedUpload}"
-        val connectionText = if (preferencesManager.notificationStyle == "Detailed") {
-            val todayDate = NetworkUtils.formatDateString()
-            "${networkType.displayName} • Active ($todayDate)"
+        val hasUsagePermission = NetworkUtils.hasUsageStatsPermission(this)
+        val todayStr = NetworkUtils.formatDateString()
+
+        // Check if date rolled over since last cache, in which case daily usage starts at 0 for the new day
+        val isSameDay = (preferencesManager.cachedTodayDate == todayStr)
+        val mobileBytes = if (isSameDay) preferencesManager.cachedTodayMobileBytes else 0L
+        val wifiBytes = if (isSameDay) preferencesManager.cachedTodayWifiBytes else 0L
+        val totalBytes = mobileBytes + wifiBytes
+
+        // Row 1: ↓ 1.5 MB/s    ↑ 128 KB/s
+        val speedTitle = "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
+
+        // Row 2: Mobile: 620 MB    Wi-Fi: 1.20 GB
+        val usageSummary = if (hasUsagePermission) {
+            "Mobile: ${NetworkUtils.formatBytes(mobileBytes)}    Wi-Fi: ${NetworkUtils.formatBytes(wifiBytes)}"
         } else {
-            networkType.displayName
+            "Usage access required for daily totals"
         }
 
+        // Expanded view lines
+        val expandedStyle = NotificationCompat.InboxStyle()
+            .addLine(speedTitle)
+            .addLine("Today's Mobile: ${if (hasUsagePermission) NetworkUtils.formatBytes(mobileBytes) else "Unavailable"}")
+            .addLine("Today's Wi-Fi: ${if (hasUsagePermission) NetworkUtils.formatBytes(wifiBytes) else "Unavailable"}")
+            .addLine("Today's Total: ${if (hasUsagePermission) NetworkUtils.formatBytes(totalBytes) else "Unavailable"}")
+            .addLine("Connection: ${networkType.displayName}")
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(speedText)
-            .setContentText(connectionText)
+            .setContentTitle(speedTitle)
+            .setContentText(usageSummary)
+            .setStyle(expandedStyle)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)

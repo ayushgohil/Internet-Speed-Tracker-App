@@ -88,6 +88,18 @@ class PreferencesManager(context: Context) {
         get() = prefs.getString(KEY_NOTIFICATION_STYLE, "Minimal") ?: "Minimal"
         set(value) = prefs.edit().putString(KEY_NOTIFICATION_STYLE, value).apply()
 
+    var cachedTodayMobileBytes: Long
+        get() = prefs.getLong(KEY_CACHED_TODAY_MOBILE_BYTES, 0L)
+        set(value) = prefs.edit().putLong(KEY_CACHED_TODAY_MOBILE_BYTES, value).apply()
+
+    var cachedTodayWifiBytes: Long
+        get() = prefs.getLong(KEY_CACHED_TODAY_WIFI_BYTES, 0L)
+        set(value) = prefs.edit().putLong(KEY_CACHED_TODAY_WIFI_BYTES, value).apply()
+
+    var cachedTodayDate: String?
+        get() = prefs.getString(KEY_CACHED_TODAY_DATE, null)
+        set(value) = prefs.edit().putString(KEY_CACHED_TODAY_DATE, value).apply()
+
     companion object {
         private const val PREFS_NAME = "netpulse_preferences"
         private const val KEY_BACKGROUND_MONITORING = "key_background_monitoring"
@@ -110,6 +122,9 @@ class PreferencesManager(context: Context) {
         private const val KEY_SHOW_SPEED_IN_STATUS_BAR = "key_show_speed_in_status_bar"
         private const val KEY_SPEED_UNIT_PREFERENCE = "key_speed_unit_preference"
         private const val KEY_NOTIFICATION_STYLE = "key_notification_style"
+        private const val KEY_CACHED_TODAY_MOBILE_BYTES = "key_cached_today_mobile_bytes"
+        private const val KEY_CACHED_TODAY_WIFI_BYTES = "key_cached_today_wifi_bytes"
+        private const val KEY_CACHED_TODAY_DATE = "key_cached_today_date"
 
         @Volatile
         private var INSTANCE: PreferencesManager? = null
