@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
                     onSetLogRetentionDays = { days -> viewModel.setLogRetentionDays(days) },
                     onToggleSpeedInStatusBar = { viewModel.toggleShowSpeedInStatusBar() },
                     onSetSpeedUnit = { unit -> viewModel.setSpeedUnitPreference(unit) },
+                    onSetNotificationStyle = { style -> viewModel.setNotificationStylePreference(style) },
                     onReconcileUsage = { viewModel.triggerManualReconciliation() }
                 )
             }

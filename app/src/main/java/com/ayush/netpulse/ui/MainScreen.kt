@@ -41,6 +41,7 @@ fun MainScreen(
     onSetLogRetentionDays: (Int) -> Unit = {},
     onToggleSpeedInStatusBar: () -> Unit = {},
     onSetSpeedUnit: (String) -> Unit = {},
+    onSetNotificationStyle: (String) -> Unit = {},
     onReconcileUsage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -55,6 +56,7 @@ fun MainScreen(
             onToggleBackgroundMonitoring = onToggleBackgroundService,
             onToggleSpeedInStatusBar = onToggleSpeedInStatusBar,
             onSetSpeedUnit = onSetSpeedUnit,
+            onSetNotificationStyle = onSetNotificationStyle,
             onRequestUsageAccess = onRequestUsageAccess,
             onRequestNotificationPermission = onRequestNotificationPermission,
             onRequestBatteryOptimization = onRequestBatteryOptimization,

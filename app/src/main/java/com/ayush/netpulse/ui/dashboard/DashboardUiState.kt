@@ -23,5 +23,6 @@ data class DashboardUiState(
     val usageErrorMessage: String? = null,
     val showSpeedInStatusBar: Boolean = false,
     val speedUnitPreference: String = "Auto",
+    val notificationStyle: String = "Minimal",
     val isReconcilingUsage: Boolean = false
 )

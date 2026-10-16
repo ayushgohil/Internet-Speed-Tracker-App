@@ -101,4 +101,26 @@ class SpeedSmootherTest {
         assertEquals(0L, s2.downloadBytesPerSec)
         assertEquals(90 * 1024L, s2.uploadBytesPerSec) // (60 + 120) / 2 = 90
     }
+
+    @Test
+    fun testAsymmetricDownloadUploadRemainsCompletelyIndependent() {
+        // Case A: High Download (800 KB/s), Low Upload (20 KB/s)
+        val down800 = 800 * 1024L
+        val up20 = 20 * 1024L
+        val resA = smoother.smooth(LiveSpeed(down800, up20), NetworkType.WIFI)
+        assertEquals(down800, resA.downloadBytesPerSec)
+        assertEquals(up20, resA.uploadBytesPerSec)
+        assertEquals("800.0 KB/s", resA.formattedDownload)
+        assertEquals("20.0 KB/s", resA.formattedUpload)
+
+        // Case B: Low Download (5 KB/s), High Upload (600 KB/s)
+        val down5 = 5 * 1024L
+        val up600 = 600 * 1024L
+        smoother.reset()
+        val resB = smoother.smooth(LiveSpeed(down5, up600), NetworkType.CELLULAR)
+        assertEquals(down5, resB.downloadBytesPerSec)
+        assertEquals(up600, resB.uploadBytesPerSec)
+        assertEquals("5.0 KB/s", resB.formattedDownload)
+        assertEquals("600.0 KB/s", resB.formattedUpload)
+    }
 }

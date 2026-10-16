@@ -95,7 +95,8 @@ class DashboardViewModel(
         _uiState.update {
             it.copy(
                 showSpeedInStatusBar = preferencesManager.showSpeedInStatusBar,
-                speedUnitPreference = preferencesManager.speedUnitPreference
+                speedUnitPreference = preferencesManager.speedUnitPreference,
+                notificationStyle = preferencesManager.notificationStyle
             )
         }
 
@@ -312,6 +313,16 @@ class DashboardViewModel(
     fun setSpeedUnitPreference(unit: String) {
         preferencesManager.speedUnitPreference = unit
         _uiState.update { it.copy(speedUnitPreference = unit) }
+    }
+
+    fun setNotificationStylePreference(style: String) {
+        preferencesManager.notificationStyle = style
+        _uiState.update { it.copy(notificationStyle = style) }
+        val context = getApplication<Application>().applicationContext
+        // Trigger notification update with the new style without resetting service or baseline
+        if (_uiState.value.isBackgroundServiceRunning) {
+            SpeedTrackerService.start(context)
+        }
     }
 
     fun triggerManualReconciliation() {

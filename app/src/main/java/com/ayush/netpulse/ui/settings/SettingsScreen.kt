@@ -78,6 +78,7 @@ fun SettingsScreen(
     onToggleBackgroundMonitoring: () -> Unit,
     onToggleSpeedInStatusBar: () -> Unit,
     onSetSpeedUnit: (String) -> Unit,
+    onSetNotificationStyle: (String) -> Unit = {},
     onRequestUsageAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRequestBatteryOptimization: () -> Unit,
@@ -89,6 +90,7 @@ fun SettingsScreen(
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
     var showRetentionDialog by remember { mutableStateOf(false) }
+    var showNotificationStyleDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -163,8 +165,11 @@ fun SettingsScreen(
                 // Notification Style
                 SettingsClickableRow(
                     title = "Notification style",
-                    value = "Minimal (recommended)",
-                    onClick = {}
+                    value = when (uiState.notificationStyle) {
+                        "Detailed" -> "Detailed (Speed + Usage)"
+                        else -> "Minimal (recommended)"
+                    },
+                    onClick = { showNotificationStyleDialog = true }
                 )
             }
         }
@@ -460,6 +465,55 @@ fun SettingsScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showUnitDialog = false }) {
+                    Text(text = "Close", color = Slate400)
+                }
+            },
+            containerColor = DarkSurface
+        )
+    }
+
+    if (showNotificationStyleDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationStyleDialog = false },
+            title = { Text(text = "Notification Style", color = Color.White) },
+            text = {
+                Column {
+                    listOf(
+                        "Minimal" to "Minimal (Speed & Network Type)",
+                        "Detailed" to "Detailed (Speed, Network & Today's Usage)"
+                    ).forEach { (styleKey, label) ->
+                        val isSelected = uiState.notificationStyle == styleKey
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSetNotificationStyle(styleKey)
+                                    showNotificationStyleDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) Cyan400 else Color.White,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = Cyan400,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showNotificationStyleDialog = false }) {
                     Text(text = "Close", color = Slate400)
                 }
             },

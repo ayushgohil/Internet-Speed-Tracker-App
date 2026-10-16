@@ -21,8 +21,10 @@ class Phase8VerificationTest {
         assertEquals("0", SpeedIconGenerator.formatCompactSpeed(0L))
         assertEquals("0", SpeedIconGenerator.formatCompactSpeed(-500L))
 
-        // Sub-KB (< 1024 bytes)
-        assertEquals("0", SpeedIconGenerator.formatCompactSpeed(500L))
+        // Sub-KB (< 1024 bytes, above 100 B/s displays tenths to prevent premature zero)
+        assertEquals("0", SpeedIconGenerator.formatCompactSpeed(50L))
+        assertEquals("0.5K", SpeedIconGenerator.formatCompactSpeed(500L))
+        assertEquals("0.8K", SpeedIconGenerator.formatCompactSpeed(800L))
 
         // Kilobytes (< 1000 KB)
         assertEquals("12K", SpeedIconGenerator.formatCompactSpeed(12 * 1024L))

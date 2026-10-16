@@ -13,11 +13,13 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.ayush.netpulse.BuildConfig
 import com.ayush.netpulse.NetPulseApp
 import com.ayush.netpulse.R
 import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.ui.MainActivity
+import com.ayush.netpulse.util.NetworkUtils
 import com.ayush.netpulse.util.PreferencesManager
 import com.ayush.netpulse.util.SpeedIconGenerator
 import kotlinx.coroutines.CancellationException
@@ -193,13 +195,17 @@ class SpeedTrackerService : Service() {
                     } else {
                         "standard"
                     }
-                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}"
+                    val currentStyle = preferencesManager.notificationStyle
+                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle"
                     val timeSinceLastNotif = now - lastNotificationUpdateTime
 
                     if (signature != lastNotificationSignature && (timeSinceLastNotif >= 2500L || currentNetworkType != lastNotifiedNetworkType)) {
                         lastNotificationSignature = signature
                         lastNotifiedNetworkType = currentNetworkType
                         lastNotificationUpdateTime = now
+                        if (BuildConfig.DEBUG && tickCount % 5 == 0) {
+                            Log.d(TAG, "Speed sample: rawDown=${speed.downloadBytesPerSec}B/s, rawUp=${speed.uploadBytesPerSec}B/s, iconText=$compactSpeed, style=$currentStyle")
+                        }
                         updateNotificationSafely(speed, currentNetworkType)
                     } else if (isScreenInteractive && timeSinceLastNotif >= 5000L) {
                         // Heartbeat notification refresh when screen is active
@@ -368,7 +374,12 @@ class SpeedTrackerService : Service() {
         )
 
         val speedText = "↓ ${speed.formattedDownload}   ↑ ${speed.formattedUpload}"
-        val connectionText = networkType.displayName
+        val connectionText = if (preferencesManager.notificationStyle == "Detailed") {
+            val todayDate = NetworkUtils.formatDateString()
+            "${networkType.displayName} • Active ($todayDate)"
+        } else {
+            networkType.displayName
+        }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(speedText)

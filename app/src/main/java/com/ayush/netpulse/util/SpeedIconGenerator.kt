@@ -30,23 +30,31 @@ object SpeedIconGenerator {
      * Formats bytes per second into an ultra-compact 1-4 character string:
      * Examples:
      * - 0 B/s -> "0"
-     * - 800 B/s -> "0"
+     * - 50 B/s -> "0"
+     * - 300 B/s -> "0.3K" (prevents premature zero rounding for small active traffic)
+     * - 800 B/s -> "0.8K"
      * - 12 KB/s -> "12K"
      * - 300 KB/s -> "300K"
      * - 950 KB/s -> "950K"
-     * - 1.2 MB/s -> "1M" (no tiny dot or unreadable decimals)
+     * - 1.2 MB/s -> "1M" (no tiny dot or unreadable decimals for MB)
      * - 15.6 MB/s -> "16M"
      */
     fun formatCompactSpeed(bytesPerSec: Long): String {
         if (bytesPerSec <= 0L) return "0"
-        val kb = bytesPerSec / 1024
+        val kbDouble = bytesPerSec / 1024.0
+        val kbInt = kbDouble.toInt()
         return when {
-            kb < 1 -> "0"
-            kb < 1000 -> "${kb}K"
-            else -> {
-                val mb = (kb / 1024.0).roundToInt().coerceAtLeast(1)
+            kbInt >= 1000 -> {
+                val mb = (kbDouble / 1024.0).roundToInt().coerceAtLeast(1)
                 "${mb}M"
             }
+            kbInt >= 1 -> "${kbInt}K"
+            kbDouble >= 0.1 -> {
+                // Between 102 B/s and 1023 B/s: display "0.X K" (e.g. "0.3K") so small active traffic doesn't show 0
+                val tenth = (kbDouble * 10).roundToInt()
+                if (tenth >= 10) "1K" else "0.${tenth}K"
+            }
+            else -> "0"
         }
     }
 
