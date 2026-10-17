@@ -198,9 +198,9 @@ class SpeedTrackerService : Service() {
 
                     tickCount++
 
-                    // Stable notification & status bar update:
-                    // Avoid spamming NotificationManager every 1s, which Android 13-15 throttles or silences.
-                    // Instead, update at a stable cadence (every 2.5 - 3 seconds) or immediately on transport change.
+                    // Responsive notification & status bar update:
+                    // Target ~1000ms interval when device screen is interactive and displayed metrics change,
+                    // preserving lower-frequency updates when screen is locked or idle to save battery.
                     val compactSpeed = if (preferencesManager.showSpeedInStatusBar) {
                         SpeedIconGenerator.formatCompactSpeed(speed.downloadBytesPerSec)
                     } else {
@@ -212,7 +212,14 @@ class SpeedTrackerService : Service() {
                     val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
                     val timeSinceLastNotif = now - lastNotificationUpdateTime
 
-                    if (signature != lastNotificationSignature && (timeSinceLastNotif >= 2500L || currentNetworkType != lastNotifiedNetworkType)) {
+                    val configuredInterval = preferencesManager.notificationRefreshIntervalMs
+                    val minNotifInterval = if (isScreenInteractive) {
+                        (configuredInterval - 50L).coerceAtLeast(800L)
+                    } else {
+                        4500L
+                    }
+
+                    if (signature != lastNotificationSignature && (timeSinceLastNotif >= minNotifInterval || currentNetworkType != lastNotifiedNetworkType)) {
                         lastNotificationSignature = signature
                         lastNotifiedNetworkType = currentNetworkType
                         lastNotificationUpdateTime = now
@@ -220,7 +227,7 @@ class SpeedTrackerService : Service() {
                             Log.d(TAG, "Speed sample: rawDown=${speed.downloadBytesPerSec}B/s, rawUp=${speed.uploadBytesPerSec}B/s, iconText=$compactSpeed, style=$currentStyle")
                         }
                         updateNotificationSafely(speed, currentNetworkType)
-                    } else if (isScreenInteractive && timeSinceLastNotif >= 5000L) {
+                    } else if (isScreenInteractive && timeSinceLastNotif >= (configuredInterval * 3).coerceAtLeast(4000L)) {
                         // Heartbeat notification refresh when screen is active
                         lastNotificationUpdateTime = now
                         updateNotificationSafely(speed, currentNetworkType)

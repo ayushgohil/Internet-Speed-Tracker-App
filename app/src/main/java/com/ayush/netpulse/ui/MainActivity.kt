@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
                     onToggleSpeedInStatusBar = { viewModel.toggleShowSpeedInStatusBar() },
                     onSetSpeedUnit = { unit -> viewModel.setSpeedUnitPreference(unit) },
                     onSetNotificationStyle = { style -> viewModel.setNotificationStylePreference(style) },
+                    onSetNotificationRefreshInterval = { interval -> viewModel.setNotificationRefreshInterval(interval) },
                     onSetAppTheme = { theme -> viewModel.setAppThemePreference(theme) },
                     onReconcileUsage = { viewModel.triggerManualReconciliation() }
                 )

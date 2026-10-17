@@ -97,7 +97,8 @@ class DashboardViewModel(
                 showSpeedInStatusBar = preferencesManager.showSpeedInStatusBar,
                 speedUnitPreference = preferencesManager.speedUnitPreference,
                 notificationStyle = preferencesManager.notificationStyle,
-                appTheme = preferencesManager.appTheme
+                appTheme = preferencesManager.appTheme,
+                notificationRefreshIntervalMs = preferencesManager.notificationRefreshIntervalMs
             )
         }
 
@@ -324,6 +325,11 @@ class DashboardViewModel(
         if (_uiState.value.isBackgroundServiceRunning) {
             SpeedTrackerService.start(context)
         }
+    }
+
+    fun setNotificationRefreshInterval(intervalMs: Long) {
+        preferencesManager.notificationRefreshIntervalMs = intervalMs
+        _uiState.update { it.copy(notificationRefreshIntervalMs = intervalMs) }
     }
 
     fun setAppThemePreference(theme: String) {

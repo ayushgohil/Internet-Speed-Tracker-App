@@ -1,6 +1,7 @@
 package com.ayush.netpulse.ui.settings
 
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.model.DiagnosticsInfo
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
+import com.ayush.netpulse.ui.logs.LogsTab
 import com.ayush.netpulse.ui.theme.LocalNetPulseColors
 
 @Composable
@@ -65,6 +67,7 @@ fun SettingsScreen(
     onToggleSpeedInStatusBar: () -> Unit,
     onSetSpeedUnit: (String) -> Unit,
     onSetNotificationStyle: (String) -> Unit = {},
+    onSetNotificationRefreshInterval: (Long) -> Unit = {},
     onSetAppTheme: (String) -> Unit = {},
     onRequestUsageAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -72,13 +75,27 @@ fun SettingsScreen(
     onSetRetentionDays: (Int) -> Unit,
     onClearLogs: () -> Unit,
     onReconcileUsage: () -> Unit,
+    initialOpenSpeedLogs: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    var showSpeedLogs by rememberSaveable { mutableStateOf(initialOpenSpeedLogs) }
+
+    if (showSpeedLogs) {
+        LogsTab(
+            records = uiState.recentRecords,
+            onClearLogs = onClearLogs,
+            onBack = { showSpeedLogs = false },
+            modifier = modifier
+        )
+        return
+    }
+
     val netPulseColors = LocalNetPulseColors.current
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
     var showRetentionDialog by remember { mutableStateOf(false) }
     var showNotificationStyleDialog by remember { mutableStateOf(false) }
+    var showRefreshIntervalDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -126,9 +143,9 @@ fun SettingsScreen(
                 SettingsClickableRow(
                     title = "App theme",
                     value = when (uiState.appTheme) {
-                        "Light" -> "Light theme"
-                        "System" -> "System default"
-                        else -> "Dark (Deep Teal)"
+                        "Light" -> "Light (Blueberry + Cream Soda)"
+                        "System" -> "Follow system"
+                        else -> "Dark (Midnight Blueberry)"
                     },
                     onClick = { showThemeDialog = true }
                 )
@@ -177,6 +194,18 @@ fun SettingsScreen(
                     },
                     onClick = { showNotificationStyleDialog = true }
                 )
+
+                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+
+                // Notification Refresh Rate
+                SettingsClickableRow(
+                    title = "Notification refresh rate",
+                    value = when (uiState.notificationRefreshIntervalMs) {
+                        1000L -> "1 second (Interactive)"
+                        else -> "2.5 seconds (Battery saver fallback)"
+                    },
+                    onClick = { showRefreshIntervalDialog = true }
+                )
             }
         }
 
@@ -222,6 +251,15 @@ fun SettingsScreen(
         item {
             SectionTitle(title = "History & Storage")
             SettingsCard {
+                SettingsClickableRow(
+                    title = "View Speed Logs",
+                    value = "${uiState.recentRecords.size} samples",
+                    valueColor = MaterialTheme.colorScheme.primary,
+                    onClick = { showSpeedLogs = true }
+                )
+
+                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+
                 SettingsClickableRow(
                     title = "Speed log retention",
                     value = "${uiState.diagnosticsInfo.logRetentionDays} days",
@@ -281,7 +319,11 @@ fun SettingsScreen(
         // 5. DIAGNOSTICS SECTION
         item {
             SectionTitle(title = "Diagnostics")
-            DiagnosticsContentCard(diagnostics = uiState.diagnosticsInfo)
+            DiagnosticsContentCard(
+                diagnostics = uiState.diagnosticsInfo,
+                recordsCount = uiState.recentRecords.size,
+                onViewLogs = { showSpeedLogs = true }
+            )
         }
 
         // 6. ABOUT SECTION
@@ -313,7 +355,7 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Version 1.0.0 • Deep Teal Edition",
+                                text = "Version 1.0.0 • Midnight Blueberry Edition",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -334,14 +376,14 @@ fun SettingsScreen(
                                 Icon(
                                     imageVector = Icons.Default.Security,
                                     contentDescription = "Privacy",
-                                    tint = netPulseColors.download,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "100% Local & Offline",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = netPulseColors.download,
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -374,9 +416,9 @@ fun SettingsScreen(
             text = {
                 Column {
                     listOf(
-                        "Dark" to "Dark (Deep Teal)",
-                        "Light" to "Light",
-                        "System" to "System default"
+                        "Dark" to "Dark (Midnight Blueberry)",
+                        "Light" to "Light (Blueberry + Cream Soda)",
+                        "System" to "Follow system"
                     ).forEach { (themeKey, label) ->
                         val isSelected = uiState.appTheme == themeKey
                         Row(
@@ -411,6 +453,62 @@ fun SettingsScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showThemeDialog = false }) {
+                    Text(text = "Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    if (showRefreshIntervalDialog) {
+        AlertDialog(
+            onDismissRequest = { showRefreshIntervalDialog = false },
+            title = {
+                Text(
+                    text = "Notification Refresh Rate",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    listOf(
+                        1000L to "1 second (Interactive — responsive live speed)",
+                        2500L to "2.5 seconds (Battery saver fallback)"
+                    ).forEach { (intervalMs, label) ->
+                        val isSelected = uiState.notificationRefreshIntervalMs == intervalMs
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSetNotificationRefreshInterval(intervalMs)
+                                    showRefreshIntervalDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showRefreshIntervalDialog = false }) {
                     Text(text = "Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
@@ -727,7 +825,7 @@ private fun PermissionItem(
     onRequest: () -> Unit
 ) {
     val netPulseColors = LocalNetPulseColors.current
-    val statusColor = if (isGranted) netPulseColors.download else netPulseColors.warning
+    val statusColor = if (isGranted) MaterialTheme.colorScheme.primary else netPulseColors.warning
 
     Column(
         modifier = Modifier
@@ -784,10 +882,14 @@ private fun PermissionItem(
 }
 
 @Composable
-private fun DiagnosticsContentCard(diagnostics: DiagnosticsInfo) {
+private fun DiagnosticsContentCard(
+    diagnostics: DiagnosticsInfo,
+    recordsCount: Int,
+    onViewLogs: () -> Unit
+) {
     val netPulseColors = LocalNetPulseColors.current
     val serviceStatusColor = when (diagnostics.resolvedServiceStatus) {
-        "Active" -> netPulseColors.download
+        "Active" -> MaterialTheme.colorScheme.primary
         "Needs Permission" -> netPulseColors.warning
         "Stopped" -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> netPulseColors.warning
@@ -811,6 +913,46 @@ private fun DiagnosticsContentCard(diagnostics: DiagnosticsInfo) {
                 "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
                 MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onViewLogs)
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Speed Logs",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "View all raw speed telemetry records",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "$recordsCount records",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
             if (!diagnostics.lastNotificationException.isNullOrBlank()) {
                 Box(
@@ -863,4 +1005,3 @@ private fun DiagRow(label: String, value: String, valueColor: Color = MaterialTh
         )
     }
 }
-

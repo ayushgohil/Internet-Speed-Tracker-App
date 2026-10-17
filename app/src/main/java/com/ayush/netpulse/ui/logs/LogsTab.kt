@@ -54,12 +54,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+
 @Composable
 fun LogsTab(
     records: List<SpeedRecordEntity>,
     onClearLogs: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null
 ) {
+    if (onBack != null) {
+        BackHandler { onBack() }
+    }
     val netPulseColors = LocalNetPulseColors.current
     var selectedFilter by remember { mutableStateOf("ALL") }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
@@ -132,18 +139,37 @@ fun LogsTab(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Speed Logs",
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${records.size} samples recorded locally",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onBack != null) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(1.dp, netPulseColors.cardBorder, CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                    Column {
+                        Text(
+                            text = "Speed Logs",
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${records.size} samples recorded locally",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 if (records.isNotEmpty()) {

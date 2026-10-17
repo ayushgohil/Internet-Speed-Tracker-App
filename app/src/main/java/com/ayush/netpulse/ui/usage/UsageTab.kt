@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,16 +57,16 @@ import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.theme.LocalNetPulseColors
-import com.ayush.netpulse.ui.theme.NetPulseExtendedColors
 import com.ayush.netpulse.util.NetworkUtils
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
-enum class UsageFilterType {
-    MOBILE,
-    WIFI,
-    TOTAL
+enum class UsageFilterType(val label: String) {
+    TOTAL("Total"),
+    MOBILE("Mobile"),
+    WIFI("Wi-Fi")
 }
 
 data class DayHeatmapCell(
@@ -81,16 +83,81 @@ fun UsageTab(
     uiState: DashboardUiState,
     onRequestUsageAccess: () -> Unit,
     onRefreshUsage: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lazyListState: LazyListState = rememberLazyListState()
+) {
+    UsageTab(
+        recentDailyRecords = uiState.recentDailyRecords,
+        hasUsageAccessPermission = uiState.hasUsageAccessPermission,
+        isLoadingUsage = uiState.isLoadingUsage,
+        isReconcilingUsage = uiState.isReconcilingUsage,
+        onRequestUsageAccess = onRequestUsageAccess,
+        onRefreshUsage = onRefreshUsage,
+        modifier = modifier,
+        lazyListState = lazyListState
+    )
+}
+
+@Composable
+fun UsageTab(
+    recentDailyRecords: List<DailyUsageEntity>,
+    hasUsageAccessPermission: Boolean,
+    isLoadingUsage: Boolean,
+    isReconcilingUsage: Boolean,
+    onRequestUsageAccess: () -> Unit,
+    onRefreshUsage: () -> Unit,
+    modifier: Modifier = Modifier,
+    lazyListState: LazyListState = rememberLazyListState()
 ) {
     var selectedFilter by remember { mutableStateOf(UsageFilterType.TOTAL) }
     var selectedDayDetail by remember { mutableStateOf<DayHeatmapCell?>(null) }
 
-    val daysList = remember(uiState.recentDailyRecords) {
-        generate90DaysGrid(uiState.recentDailyRecords)
+    // Precompute 90-day sequence only when DB records change
+    val daysList = remember(recentDailyRecords) {
+        generate90DaysGrid(recentDailyRecords)
     }
 
-    if (!uiState.hasUsageAccessPermission) {
+    // Precompute reversed list once to avoid allocating 90 items per recomposition
+    val reversedDaysList = remember(daysList) {
+        daysList.reversed()
+    }
+
+    // Precompute weeks layout once
+    val weeks = remember(daysList) {
+        chunkIntoWeeks(daysList)
+    }
+
+    // Precompute dataset-aware quantile thresholds for dynamic heatmap
+    val thresholds = remember(daysList, selectedFilter) {
+        val values = daysList.mapNotNull { cell ->
+            cell.entity?.let { e ->
+                when (selectedFilter) {
+                    UsageFilterType.MOBILE -> e.totalMobileBytes
+                    UsageFilterType.WIFI -> e.totalWifiBytes
+                    UsageFilterType.TOTAL -> e.totalAllBytes
+                }
+            }
+        }
+        DynamicHeatmapClassifier.computeThresholds(values)
+    }
+
+    // Precompute intensity level for each cell to eliminate per-item calculations
+    val cellLevelMap = remember(daysList, selectedFilter, thresholds) {
+        daysList.associate { cell ->
+            val bytes = when (selectedFilter) {
+                UsageFilterType.MOBILE -> cell.entity?.totalMobileBytes ?: 0L
+                UsageFilterType.WIFI -> cell.entity?.totalWifiBytes ?: 0L
+                UsageFilterType.TOTAL -> cell.entity?.totalAllBytes ?: 0L
+            }
+            cell.dateStr to DynamicHeatmapClassifier.classify(
+                hasEntity = cell.entity != null,
+                bytes = bytes,
+                thresholds = thresholds
+            )
+        }
+    }
+
+    if (!hasUsageAccessPermission) {
         UsagePermissionRequiredCard(
             onRequestUsageAccess = onRequestUsageAccess,
             modifier = modifier
@@ -99,15 +166,16 @@ fun UsageTab(
     }
 
     LazyColumn(
+        state = lazyListState,
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 1. Header
-        item {
-            Spacer(modifier = Modifier.height(10.dp))
+        item(key = "header") {
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -127,7 +195,7 @@ fun UsageTab(
                     )
                 }
 
-                if (uiState.isLoadingUsage || uiState.isReconcilingUsage) {
+                if (isLoadingUsage || isReconcilingUsage) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp,
@@ -154,23 +222,19 @@ fun UsageTab(
         }
 
         // 2. Filter Chips: Mobile | Wi-Fi | Total
-        item {
+        item(key = "filter_chips") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf(
-                    Pair(UsageFilterType.MOBILE, "Mobile"),
-                    Pair(UsageFilterType.WIFI, "Wi-Fi"),
-                    Pair(UsageFilterType.TOTAL, "Total")
-                ).forEach { (type, label) ->
-                    val isSelected = selectedFilter == type
+                UsageFilterType.values().forEach { filterType ->
+                    val isSelected = selectedFilter == filterType
                     FilterChip(
                         selected = isSelected,
-                        onClick = { selectedFilter = type },
+                        onClick = { selectedFilter = filterType },
                         label = {
                             Text(
-                                text = label,
+                                text = filterType.label,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
@@ -183,7 +247,7 @@ fun UsageTab(
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = isSelected,
-                            borderColor = MaterialTheme.colorScheme.outline,
+                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                             selectedBorderColor = MaterialTheme.colorScheme.primary
                         ),
                         shape = RoundedCornerShape(20.dp)
@@ -192,46 +256,45 @@ fun UsageTab(
             }
         }
 
-        // 3. Calendar Heatmap Card (GitHub-Style 90-Day Contribution Grid)
-        item {
+        // 3. Dynamic Activity Heatmap Card
+        item(key = "heatmap_card") {
             CalendarHeatmapCard(
-                daysList = daysList,
-                selectedFilter = selectedFilter,
+                weeks = weeks,
+                cellLevelMap = cellLevelMap,
+                thresholds = thresholds,
                 onSelectCell = { cell -> selectedDayDetail = cell }
             )
         }
 
-        // 4. Detailed Daily Usage Table (Last 90 days)
-        item {
+        // 4. Detailed Daily Usage Table (Last 90 days) Title
+        item(key = "table_title") {
             Text(
                 text = "Daily Usage (Last 90 days)",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 2.dp, top = 4.dp)
+                modifier = Modifier.padding(start = 2.dp, top = 2.dp)
             )
         }
 
         // Table Header
-        item {
+        item(key = "table_header") {
             DailyTableHeaderRow()
         }
 
-        // Table Rows
-        items(daysList.reversed()) { cell ->
+        // Stable-Keyed Table Rows: Prevents full list recomposition and ensures smooth 60/120fps scrolling
+        items(
+            items = reversedDaysList,
+            key = { it.dateStr }
+        ) { cell ->
             DailyTableRow(
                 cell = cell,
                 onClick = { selectedDayDetail = cell }
             )
         }
 
-        // 5. Monthly Totals Summary Footer
-        item {
-            MonthlySummaryCard(daysList = daysList)
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
+        item(key = "footer_spacer") {
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
@@ -246,8 +309,9 @@ fun UsageTab(
 
 @Composable
 private fun CalendarHeatmapCard(
-    daysList: List<DayHeatmapCell>,
-    selectedFilter: UsageFilterType,
+    weeks: List<List<DayHeatmapCell?>>,
+    cellLevelMap: Map<String, HeatmapIntensityLevel>,
+    thresholds: HeatmapThresholds?,
     onSelectCell: (DayHeatmapCell) -> Unit
 ) {
     val npColors = LocalNetPulseColors.current
@@ -272,7 +336,7 @@ private fun CalendarHeatmapCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "90 Days Overview",
+                    text = "Quantile-Aware • 90 Days",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -304,9 +368,6 @@ private fun CalendarHeatmapCard(
                     }
                 }
 
-                // Grid of weeks
-                val weeks = remember(daysList) { chunkIntoWeeks(daysList) }
-
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     weeks.forEach { week ->
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -335,12 +396,8 @@ private fun CalendarHeatmapCard(
                             for (dayIndex in 0 until 7) {
                                 val cell = week.getOrNull(dayIndex)
                                 if (cell != null) {
-                                    val bytes = when (selectedFilter) {
-                                        UsageFilterType.MOBILE -> cell.entity?.totalMobileBytes ?: 0L
-                                        UsageFilterType.WIFI -> cell.entity?.totalWifiBytes ?: 0L
-                                        UsageFilterType.TOTAL -> cell.entity?.totalAllBytes ?: 0L
-                                    }
-                                    val color = getHeatmapCellColor(cell.entity, bytes, npColors)
+                                    val level = cellLevelMap[cell.dateStr] ?: HeatmapIntensityLevel.MISSING
+                                    val color = DynamicHeatmapClassifier.getColor(level, npColors)
 
                                     Box(
                                         modifier = Modifier
@@ -348,8 +405,8 @@ private fun CalendarHeatmapCard(
                                             .clip(RoundedCornerShape(2.dp))
                                             .background(color)
                                             .border(
-                                                width = if (cell.isToday) 1.5.dp else 0.dp,
-                                                color = if (cell.isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                                width = if (cell.isToday) 1.5.dp else 0.5.dp,
+                                                color = if (cell.isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                                                 shape = RoundedCornerShape(2.dp)
                                             )
                                             .clickable { onSelectCell(cell) }
@@ -365,38 +422,75 @@ private fun CalendarHeatmapCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Coherent Teal Intensity Scale Legend: Missing | Zero | Low | Med | High | Very High
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // Coherent Dynamic Heatmap Legend with thresholds
+            HeatmapLegend(thresholds = thresholds, npColors = npColors)
+        }
+    }
+}
+
+@Composable
+private fun HeatmapLegend(
+    thresholds: HeatmapThresholds?,
+    npColors: com.ayush.netpulse.ui.theme.NetPulseExtendedColors
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                LegendCell(color = npColors.heatmapMissing)
                 Text(
-                    text = "Less",
+                    text = "Missing",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp
                 )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LegendCell(color = npColors.heatmapMissing)
-                    LegendCell(color = npColors.heatmapZero)
-                    LegendCell(color = npColors.heatmapVeryLow)
-                    LegendCell(color = npColors.heatmapLow)
-                    LegendCell(color = npColors.heatmapMedium)
-                    LegendCell(color = npColors.heatmapHigh)
-                }
-
+                Spacer(modifier = Modifier.width(4.dp))
+                LegendCell(color = npColors.heatmapZero)
                 Text(
-                    text = "More",
+                    text = "0 B",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp
                 )
             }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (thresholds != null) "≤${NetworkUtils.formatBytes(thresholds.minPositive)}" else "Less",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp
+                )
+                LegendCell(color = npColors.heatmapLevel1)
+                LegendCell(color = npColors.heatmapLevel2)
+                LegendCell(color = npColors.heatmapLevel3)
+                LegendCell(color = npColors.heatmapLevel4)
+                LegendCell(color = npColors.heatmapLevel5)
+                Text(
+                    text = if (thresholds != null) "≥${NetworkUtils.formatBytes(thresholds.maxPositive)}" else "More",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp
+                )
+            }
+        }
+
+        if (thresholds != null && thresholds.minPositive < thresholds.maxPositive) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Quintiles: L1 ≤ ${NetworkUtils.formatBytes(thresholds.t1)} • L2 ≤ ${NetworkUtils.formatBytes(thresholds.t2)} • L3 ≤ ${NetworkUtils.formatBytes(thresholds.t3)} • L4 ≤ ${NetworkUtils.formatBytes(thresholds.t4)} • L5 > ${NetworkUtils.formatBytes(thresholds.t4)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                fontSize = 9.sp,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -408,24 +502,8 @@ private fun LegendCell(color: Color) {
             .size(10.dp)
             .clip(RoundedCornerShape(2.dp))
             .background(color)
+            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
     )
-}
-
-private fun getHeatmapCellColor(
-    entity: DailyUsageEntity?,
-    bytes: Long,
-    npColors: NetPulseExtendedColors
-): Color {
-    if (entity == null) return npColors.heatmapMissing
-    if (bytes <= 0L) return npColors.heatmapZero
-
-    val mb = bytes / (1024.0 * 1024.0)
-    return when {
-        mb < 50.0 -> npColors.heatmapVeryLow
-        mb < 200.0 -> npColors.heatmapLow
-        mb < 500.0 -> npColors.heatmapMedium
-        else -> npColors.heatmapHigh
-    }
 }
 
 @Composable
@@ -433,39 +511,37 @@ private fun DailyTableHeaderRow() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "Date",
-            style = MaterialTheme.typography.labelMedium,
+            text = "DATE",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1.3f)
         )
         Text(
-            text = "Mobile",
-            style = MaterialTheme.typography.labelMedium,
+            text = "MOBILE",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
         Text(
-            text = "Wi-Fi",
-            style = MaterialTheme.typography.labelMedium,
+            text = "WI-FI",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
         Text(
-            text = "Total",
-            style = MaterialTheme.typography.labelMedium,
+            text = "TOTAL",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1.1f)
         )
@@ -536,59 +612,6 @@ private fun DailyTableRow(
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1.1f)
         )
-    }
-}
-
-@Composable
-private fun MonthlySummaryCard(daysList: List<DayHeatmapCell>) {
-    val npColors = LocalNetPulseColors.current
-    var totalMobile = 0L
-    var totalWifi = 0L
-    var activeDays = 0
-
-    daysList.forEach { cell ->
-        cell.entity?.let {
-            totalMobile += it.totalMobileBytes
-            totalWifi += it.totalWifiBytes
-            if (it.totalAllBytes > 0) activeDays++
-        }
-    }
-    val combinedTotal = totalMobile + totalWifi
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "90-Day Usage Summary",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                SummaryItem(title = "Mobile Data", value = NetworkUtils.formatBytes(totalMobile), color = npColors.upload)
-                SummaryItem(title = "Wi-Fi Data", value = NetworkUtils.formatBytes(totalWifi), color = npColors.download)
-                SummaryItem(title = "Combined Total", value = NetworkUtils.formatBytes(combinedTotal), color = MaterialTheme.colorScheme.onSurface)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryItem(title: String, value: String, color: Color) {
-    Column {
-        Text(text = title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = value, style = MaterialTheme.typography.bodyLarge, color = color, fontWeight = FontWeight.Bold)
     }
 }
 

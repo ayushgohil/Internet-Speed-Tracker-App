@@ -18,81 +18,89 @@ data class NetPulseExtendedColors(
     val download: Color,
     val upload: Color,
     val cardBackground: Color,
+    val elevatedBackground: Color,
     val cardBorder: Color,
     val textPrimary: Color,
     val textSecondary: Color,
+    val secondaryAccent: Color, // Cream Soda
     val warning: Color,
     val error: Color,
     val heatmapMissing: Color,
     val heatmapZero: Color,
-    val heatmapVeryLow: Color,
-    val heatmapLow: Color,
-    val heatmapMedium: Color,
-    val heatmapHigh: Color
+    val heatmapLevel1: Color,
+    val heatmapLevel2: Color,
+    val heatmapLevel3: Color,
+    val heatmapLevel4: Color,
+    val heatmapLevel5: Color
 )
 
 val LocalNetPulseColors = staticCompositionLocalOf {
     NetPulseExtendedColors(
-        download = DownloadTeal,
-        upload = UploadBlue,
-        cardBackground = NavySurface,
+        download = DownloadMidnight,
+        upload = UploadMidnight,
+        cardBackground = DarkMidnightCardSurface,
+        elevatedBackground = DarkMidnightElevatedSurface,
         cardBorder = BorderDark,
         textPrimary = TextPrimaryDark,
         textSecondary = TextSecondaryDark,
+        secondaryAccent = SecondaryCreamSodaAccent,
         warning = WarningAmber,
         error = ErrorRed,
         heatmapMissing = HeatmapMissingDark,
         heatmapZero = HeatmapZeroDark,
-        heatmapVeryLow = HeatmapVeryLowDark,
-        heatmapLow = HeatmapLowDark,
-        heatmapMedium = HeatmapMediumDark,
-        heatmapHigh = HeatmapHighDark
+        heatmapLevel1 = HeatmapLevel1Dark,
+        heatmapLevel2 = HeatmapLevel2Dark,
+        heatmapLevel3 = HeatmapLevel3Dark,
+        heatmapLevel4 = HeatmapLevel4Dark,
+        heatmapLevel5 = HeatmapLevel5Dark
     )
 }
 
+// Midnight Blueberry (Dark) ColorScheme
 private val DarkColorScheme = darkColorScheme(
-    primary = AquaFoam,
-    onPrimary = DarkNavyBackground,
-    primaryContainer = DeepTeal,
-    onPrimaryContainer = AquaFoam,
-    secondary = UploadBlue,
-    onSecondary = DarkNavyBackground,
-    secondaryContainer = NavySurfaceVariant,
-    onSecondaryContainer = UploadBlue,
-    tertiary = DeepTeal,
-    onTertiary = TextPrimaryDark,
-    background = DarkNavyBackground,
-    onBackground = TextPrimaryDark,
-    surface = NavySurface,
-    onSurface = TextPrimaryDark,
-    surfaceVariant = NavySurfaceVariant,
-    onSurfaceVariant = TextSecondaryDark,
-    outline = BorderDark,
-    outlineVariant = Color(0xFF1E2D44),
-    error = ErrorRed,
-    onError = DarkNavyBackground
+    primary = PrimaryMidnightAccent,              // #8EA5FF
+    onPrimary = DarkMidnightBackground,           // #0C1224
+    primaryContainer = DarkMidnightElevatedSurface,// #202D4C
+    onPrimaryContainer = PrimaryMidnightAccent,   // #8EA5FF
+    secondary = SecondaryCreamSodaAccent,         // #FFF0C8
+    onSecondary = DarkMidnightBackground,
+    secondaryContainer = DarkMidnightElevatedSurface,
+    onSecondaryContainer = SecondaryCreamSodaAccent,
+    tertiary = PrimaryMidnightAccent,
+    onTertiary = DarkMidnightBackground,
+    background = DarkMidnightBackground,          // #0C1224
+    onBackground = TextPrimaryDark,               // #F6F7FC
+    surface = DarkMidnightCardSurface,            // #17213B
+    onSurface = TextPrimaryDark,                  // #F6F7FC
+    surfaceVariant = DarkMidnightElevatedSurface, // #202D4C
+    onSurfaceVariant = TextSecondaryDark,         // #A8B3C7
+    outline = BorderDark,                         // #303F5C
+    outlineVariant = Color(0xFF202D4C),
+    error = ErrorRed,                             // #F87171
+    onError = DarkMidnightBackground
 )
 
+// Blueberry + Cream Soda (Light) ColorScheme
 private val LightColorScheme = lightColorScheme(
-    primary = DeepTealPrimaryLight,
+    primary = PrimaryBlueberry,                   // #293D91
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFCCFBF1),
-    onPrimaryContainer = DeepTealPrimaryLight,
-    secondary = UploadBlueLight,
+    primaryContainer = CreamSodaAccent,           // #FFF0C8
+    onPrimaryContainer = PrimaryBlueberry,        // #293D91
+    secondary = UploadBrownLight,                 // #9A5B20
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFDBEAFE),
-    onSecondaryContainer = UploadBlueLight,
-    tertiary = Color(0xFF0D9488),
+    secondaryContainer = Color(0xFFEFF2FD),
+    onSecondaryContainer = PrimaryBlueberry,
+    tertiary = UploadBrownLight,
     onTertiary = Color.White,
-    background = LightBackground,
-    onBackground = TextPrimaryLight,
-    surface = LightSurface,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = TextSecondaryLight,
-    outline = BorderLight,
+    background = LightBackground,                 // #F8F9FD
+    onBackground = TextPrimaryLight,              // #17213B
+    surface = LightSurface,                       // #FFFFFF
+    onSurface = TextPrimaryLight,                 // #17213B
+    surfaceVariant = Color(0xFFF1F4FA),
+    onSurfaceVariant = TextSecondaryLight,        // #64748B
+    outline = BorderLight,                        // #E2E8F0
     outlineVariant = Color(0xFFCBD5E1),
-    error = ErrorRedLight,
+    error = ErrorRed,
     onError = Color.White
 )
 
@@ -111,37 +119,43 @@ fun NetPulseTheme(
     val colorScheme = if (isDark) DarkColorScheme else LightColorScheme
     val extendedColors = if (isDark) {
         NetPulseExtendedColors(
-            download = DownloadTeal,
-            upload = UploadBlue,
-            cardBackground = NavySurface,
+            download = DownloadMidnight,
+            upload = UploadMidnight,
+            cardBackground = DarkMidnightCardSurface,
+            elevatedBackground = DarkMidnightElevatedSurface,
             cardBorder = BorderDark,
             textPrimary = TextPrimaryDark,
             textSecondary = TextSecondaryDark,
+            secondaryAccent = SecondaryCreamSodaAccent,
             warning = WarningAmber,
             error = ErrorRed,
             heatmapMissing = HeatmapMissingDark,
             heatmapZero = HeatmapZeroDark,
-            heatmapVeryLow = HeatmapVeryLowDark,
-            heatmapLow = HeatmapLowDark,
-            heatmapMedium = HeatmapMediumDark,
-            heatmapHigh = HeatmapHighDark
+            heatmapLevel1 = HeatmapLevel1Dark,
+            heatmapLevel2 = HeatmapLevel2Dark,
+            heatmapLevel3 = HeatmapLevel3Dark,
+            heatmapLevel4 = HeatmapLevel4Dark,
+            heatmapLevel5 = HeatmapLevel5Dark
         )
     } else {
         NetPulseExtendedColors(
-            download = DownloadTealLight,
-            upload = UploadBlueLight,
+            download = DownloadBlueberryLight,
+            upload = UploadBrownLight,
             cardBackground = LightSurface,
+            elevatedBackground = Color(0xFFF1F4FA),
             cardBorder = BorderLight,
             textPrimary = TextPrimaryLight,
             textSecondary = TextSecondaryLight,
-            warning = WarningAmberLight,
-            error = ErrorRedLight,
+            secondaryAccent = CreamSodaAccent,
+            warning = WarningAmber,
+            error = ErrorRed,
             heatmapMissing = HeatmapMissingLight,
             heatmapZero = HeatmapZeroLight,
-            heatmapVeryLow = HeatmapVeryLowLight,
-            heatmapLow = HeatmapLowLight,
-            heatmapMedium = HeatmapMediumLight,
-            heatmapHigh = HeatmapHighLight
+            heatmapLevel1 = HeatmapLevel1Light,
+            heatmapLevel2 = HeatmapLevel2Light,
+            heatmapLevel3 = HeatmapLevel3Light,
+            heatmapLevel4 = HeatmapLevel4Light,
+            heatmapLevel5 = HeatmapLevel5Light
         )
     }
 

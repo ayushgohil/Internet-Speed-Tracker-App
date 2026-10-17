@@ -25,5 +25,6 @@ data class DashboardUiState(
     val speedUnitPreference: String = "Auto",
     val notificationStyle: String = "Minimal",
     val appTheme: String = "Dark",
+    val notificationRefreshIntervalMs: Long = 1000L,
     val isReconcilingUsage: Boolean = false
 )

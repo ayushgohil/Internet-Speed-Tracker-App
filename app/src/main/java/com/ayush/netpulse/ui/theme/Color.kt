@@ -3,69 +3,79 @@ package com.ayush.netpulse.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // ==============================================================================
-// NetPulse Design System: Deep Navy / Cyber Teal / Aqua Foam
+// NetPulse Design System: Blueberry + Cream Soda & Midnight Blueberry
 // ==============================================================================
 
-// --- Dark Theme Tokens ---
-val DarkNavyBackground = Color(0xFF0B1220) // Deep Navy App Background
-val NavySurface = Color(0xFF162235)        // Card / Surface Background
-val NavySurfaceVariant = Color(0xFF1E2D44) // Elevated Cards / Header / Chips
-val AquaFoam = Color(0xFF6AF0D4)           // Primary Accent / Download Indicator
-val DeepTeal = Color(0xFF075C61)           // Brand Deep Teal
-val TextPrimaryDark = Color(0xFFF1F5F9)    // Primary High-Contrast Text
-val TextSecondaryDark = Color(0xFF94A3B8)  // Secondary / Description Text
-val TextMutedDark = Color(0xFF64748B)      // Sub-muted Captions / Footers
-val DownloadTeal = Color(0xFF6AF0D4)       // Download Indicator (#6AF0D4)
-val UploadBlue = Color(0xFF8BA8FF)         // Upload Indicator (#8BA8FF)
-val BorderDark = Color(0xFF26364A)         // Clean Subtle Border (#26364A)
-val WarningAmber = Color(0xFFF5B544)       // Warning (#F5B544)
-val ErrorRed = Color(0xFFF87171)           // Error (#F87171)
+// --- Light Theme Tokens: Blueberry + Cream Soda ---
+val LightBackground = Color(0xFFF8F9FD)        // Clean Canvas (#F8F9FD)
+val LightSurface = Color(0xFFFFFFFF)           // Surface (#FFFFFF)
+val PrimaryBlueberry = Color(0xFF293D91)       // Primary Blueberry (#293D91)
+val CreamSodaAccent = Color(0xFFFFF0C8)        // Cream Soda Accent (#FFF0C8)
+val TextPrimaryLight = Color(0xFF17213B)       // Primary Text (#17213B)
+val TextSecondaryLight = Color(0xFF64748B)     // Secondary Text (#64748B)
+val BorderLight = Color(0xFFE2E8F0)            // Borders (#E2E8F0)
+val DownloadBlueberryLight = Color(0xFF293D91) // Download Indicator (#293D91)
+val UploadBrownLight = Color(0xFF9A5B20)       // Upload Indicator (#9A5B20)
 
-// --- Light Theme Tokens ---
-val LightBackground = Color(0xFFF8FAFC)    // Light Neutral Canvas
-val LightSurface = Color(0xFFFFFFFF)       // Crisp Clean White Surface
-val LightSurfaceVariant = Color(0xFFF1F5F9)// Subtle Contrast Card Variant
-val DeepTealPrimaryLight = Color(0xFF075C61)// Deep Teal Brand for Light Mode
-val TextPrimaryLight = Color(0xFF0F172A)   // High-Contrast Dark Text
-val TextSecondaryLight = Color(0xFF64748B) // Secondary Accessible Slate
-val TextMutedLight = Color(0xFF94A3B8)     // Muted Gray
-val DownloadTealLight = Color(0xFF0D9488)  // High-Contrast Teal for Download
-val UploadBlueLight = Color(0xFF3B82F6)    // Crisp Blue for Upload
-val BorderLight = Color(0xFFE2E8F0)        // Subtle Border on Light Canvas
-val WarningAmberLight = Color(0xFFD97706)  // Accessible Warning Amber
-val ErrorRedLight = Color(0xFFDC2626)      // Accessible Error Red
+// --- Dark Theme Tokens: Midnight Blueberry ---
+val DarkMidnightBackground = Color(0xFF0C1224)      // Background (#0C1224)
+val DarkMidnightCardSurface = Color(0xFF17213B)     // Card Surface (#17213B)
+val DarkMidnightElevatedSurface = Color(0xFF202D4C) // Elevated Surface (#202D4C)
+val PrimaryMidnightAccent = Color(0xFF8EA5FF)       // Primary Accent (#8EA5FF)
+val SecondaryCreamSodaAccent = Color(0xFFFFF0C8)    // Secondary Accent (#FFF0C8)
+val TextPrimaryDark = Color(0xFFF6F7FC)             // Primary Text (#F6F7FC)
+val TextSecondaryDark = Color(0xFFA8B3C7)           // Secondary Text (#A8B3C7)
+val BorderDark = Color(0xFF303F5C)                  // Borders (#303F5C)
+val DownloadMidnight = Color(0xFF8EA5FF)            // Download Indicator (#8EA5FF)
+val UploadMidnight = Color(0xFFFFF0C8)              // Upload Indicator (#FFF0C8)
+val WarningAmber = Color(0xFFF5B544)                // Warning (#F5B544)
+val ErrorRed = Color(0xFFF87171)                    // Error (#F87171)
 
-// --- Heatmap Teal Intensity Scale (Dark Theme) ---
-val HeatmapMissingDark = Color(0xFF283647)  // Missing data
-val HeatmapZeroDark = Color(0xFF1B2A3E)     // Genuine zero usage recorded
-val HeatmapVeryLowDark = Color(0xFF194E50)  // Very low
-val HeatmapLowDark = Color(0xFF207B76)      // Low
-val HeatmapMediumDark = Color(0xFF32AFA0)   // Medium
-val HeatmapHighDark = Color(0xFF6AF0D4)     // High
+// --- Heatmap Scale: Midnight Blueberry (Dark Theme) ---
+val HeatmapMissingDark = Color(0xFF303F5C)  // Missing data (#303F5C)
+val HeatmapZeroDark = Color(0xFF17213B)     // Genuine zero usage recorded
+val HeatmapLevel1Dark = Color(0xFF293A78)   // Level 1 (#293A78)
+val HeatmapLevel2Dark = Color(0xFF4258A7)   // Level 2 (#4258A7)
+val HeatmapLevel3Dark = Color(0xFF627BD0)   // Level 3 (#627BD0)
+val HeatmapLevel4Dark = Color(0xFF8EA5FF)   // Level 4 (#8EA5FF)
+val HeatmapLevel5Dark = Color(0xFFC4D0FF)   // Level 5 (#C4D0FF)
 
-// --- Heatmap Teal Intensity Scale (Light Theme) ---
-val HeatmapMissingLight = Color(0xFFE2E8F0) // Missing data
-val HeatmapZeroLight = Color(0xFFF1F5F9)    // Genuine zero usage recorded
-val HeatmapVeryLowLight = Color(0xFF99F6E4) // Very low
-val HeatmapLowLight = Color(0xFF2DD4BF)     // Low
-val HeatmapMediumLight = Color(0xFF14B8A6)  // Medium
-val HeatmapHighLight = Color(0xFF0D9488)    // High
+// --- Heatmap Scale: Blueberry (Light Theme) ---
+val HeatmapMissingLight = Color(0xFFE2E8F0) // Missing data (#E2E8F0)
+val HeatmapZeroLight = Color(0xFFFFFFFF)    // Genuine zero usage recorded
+val HeatmapLevel1Light = Color(0xFFDCE4FF)  // Level 1
+val HeatmapLevel2Light = Color(0xFFB4C5FE)  // Level 2
+val HeatmapLevel3Light = Color(0xFF8EA5FF)  // Level 3
+val HeatmapLevel4Light = Color(0xFF5673E0)  // Level 4
+val HeatmapLevel5Light = Color(0xFF293D91)  // Level 5
 
 // --- Backward-Compatibility Aliases ---
-val DarkBackground = DarkNavyBackground
-val DarkSurface = NavySurface
+val DarkBackground = DarkMidnightBackground
+val DarkSurface = DarkMidnightCardSurface
 val DarkCardBorder = BorderDark
-val Cyan400 = AquaFoam
-val Cyan500 = Color(0xFF32AFA0)
-val Blue400 = UploadBlue
-val Blue500 = Color(0xFF3B82F6)
-val Emerald400 = AquaFoam
-val Emerald500 = DeepTeal
-val Slate900 = Color(0xFF0B1220)
-val Slate800 = NavySurfaceVariant
-val Slate700 = Color(0xFF26364A)
-val Slate600 = Color(0xFF64748B)
+val Cyan400 = PrimaryMidnightAccent
+val Cyan500 = PrimaryMidnightAccent
+val Blue400 = PrimaryMidnightAccent
+val Blue500 = PrimaryBlueberry
+val Emerald400 = PrimaryMidnightAccent
+val Emerald500 = PrimaryBlueberry
+val Slate900 = DarkMidnightBackground
+val Slate800 = DarkMidnightElevatedSurface
+val Slate700 = BorderDark
+val Slate600 = TextSecondaryLight
 val Slate400 = TextSecondaryDark
-val Slate200 = Color(0xFFE2E8F0)
+val Slate200 = BorderLight
 val Amber500 = WarningAmber
 val Rose500 = ErrorRed
+val AquaFoam = PrimaryMidnightAccent
+val DeepTeal = PrimaryBlueberry
+val DownloadTeal = DownloadMidnight
+val UploadBlue = UploadMidnight
+val DownloadTealLight = DownloadBlueberryLight
+val UploadBlueLight = UploadBrownLight
+val DarkNavyBackground = DarkMidnightBackground
+val NavySurface = DarkMidnightCardSurface
+val NavySurfaceVariant = DarkMidnightElevatedSurface
+val DeepTealPrimaryLight = PrimaryBlueberry
+val WarningAmberLight = WarningAmber
+val ErrorRedLight = ErrorRed

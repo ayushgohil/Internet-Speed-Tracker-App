@@ -104,9 +104,14 @@ class PreferencesManager(context: Context) {
         get() = prefs.getString(KEY_APP_THEME, "Dark") ?: "Dark"
         set(value) = prefs.edit().putString(KEY_APP_THEME, value).apply()
 
+    var notificationRefreshIntervalMs: Long
+        get() = prefs.getLong(KEY_NOTIFICATION_REFRESH_INTERVAL_MS, 1000L)
+        set(value) = prefs.edit().putLong(KEY_NOTIFICATION_REFRESH_INTERVAL_MS, value).apply()
+
     companion object {
         private const val PREFS_NAME = "netpulse_preferences"
         private const val KEY_APP_THEME = "key_app_theme"
+        private const val KEY_NOTIFICATION_REFRESH_INTERVAL_MS = "key_notification_refresh_interval_ms"
         private const val KEY_BACKGROUND_MONITORING = "key_background_monitoring"
         private const val KEY_LAST_RECONCILED_DATE = "key_last_reconciled_date"
         private const val KEY_LAST_RECONCILED_TIMESTAMP = "key_last_reconciled_timestamp"
