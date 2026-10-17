@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalWifi4Bar
@@ -32,13 +31,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,20 +54,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
-import com.ayush.netpulse.ui.theme.Amber500
-import com.ayush.netpulse.ui.theme.Cyan400
-import com.ayush.netpulse.ui.theme.DarkBackground
-import com.ayush.netpulse.ui.theme.DarkCardBorder
-import com.ayush.netpulse.ui.theme.DarkSurface
-import com.ayush.netpulse.ui.theme.Emerald400
-import com.ayush.netpulse.ui.theme.Slate400
-import com.ayush.netpulse.ui.theme.Slate600
-import com.ayush.netpulse.ui.theme.Slate700
-import com.ayush.netpulse.ui.theme.Slate800
+import com.ayush.netpulse.ui.theme.LocalNetPulseColors
+import com.ayush.netpulse.ui.theme.NetPulseExtendedColors
 import com.ayush.netpulse.util.NetworkUtils
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 enum class UsageFilterType {
@@ -112,7 +101,7 @@ fun UsageTab(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -128,13 +117,13 @@ fun UsageTab(
                     Text(
                         text = "Usage History",
                         style = MaterialTheme.typography.headlineLarge,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "Last 90 days • Android NetworkStatsManager",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate400
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -142,7 +131,7 @@ fun UsageTab(
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp,
-                        color = Cyan400
+                        color = MaterialTheme.colorScheme.primary
                     )
                 } else {
                     IconButton(
@@ -150,12 +139,13 @@ fun UsageTab(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(DarkSurface)
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh",
-                            tint = Cyan400,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -182,19 +172,19 @@ fun UsageTab(
                             Text(
                                 text = label,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (isSelected) DarkBackground else Color.White,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan400,
-                            containerColor = DarkSurface
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = isSelected,
-                            borderColor = if (isSelected) Cyan400 else DarkCardBorder,
-                            selectedBorderColor = Cyan400
+                            borderColor = MaterialTheme.colorScheme.outline,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary
                         ),
                         shape = RoundedCornerShape(20.dp)
                     )
@@ -216,7 +206,7 @@ fun UsageTab(
             Text(
                 text = "Daily Usage (Last 90 days)",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 2.dp, top = 4.dp)
             )
@@ -260,11 +250,13 @@ private fun CalendarHeatmapCard(
     selectedFilter: UsageFilterType,
     onSelectCell: (DayHeatmapCell) -> Unit
 ) {
+    val npColors = LocalNetPulseColors.current
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -276,13 +268,13 @@ private fun CalendarHeatmapCard(
                 Text(
                     text = "Activity Heatmap",
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "90 Days Overview",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Slate400
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -304,7 +296,7 @@ private fun CalendarHeatmapCard(
                         Text(
                             text = if (idx % 2 == 0) day else "",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Slate600,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             fontSize = 9.sp,
                             modifier = Modifier.size(13.dp),
                             textAlign = TextAlign.Center
@@ -331,7 +323,7 @@ private fun CalendarHeatmapCard(
                             Text(
                                 text = monthLabel,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Slate400,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 9.sp,
                                 modifier = Modifier
                                     .height(14.dp)
@@ -348,7 +340,7 @@ private fun CalendarHeatmapCard(
                                         UsageFilterType.WIFI -> cell.entity?.totalWifiBytes ?: 0L
                                         UsageFilterType.TOTAL -> cell.entity?.totalAllBytes ?: 0L
                                     }
-                                    val color = getHeatmapCellColor(cell.entity, bytes)
+                                    val color = getHeatmapCellColor(cell.entity, bytes, npColors)
 
                                     Box(
                                         modifier = Modifier
@@ -356,8 +348,8 @@ private fun CalendarHeatmapCard(
                                             .clip(RoundedCornerShape(2.dp))
                                             .background(color)
                                             .border(
-                                                width = if (cell.isToday) 1.dp else 0.dp,
-                                                color = if (cell.isToday) Cyan400 else Color.Transparent,
+                                                width = if (cell.isToday) 1.5.dp else 0.dp,
+                                                color = if (cell.isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
                                                 shape = RoundedCornerShape(2.dp)
                                             )
                                             .clickable { onSelectCell(cell) }
@@ -373,7 +365,7 @@ private fun CalendarHeatmapCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Color scale legend: No data | Low | Med | High | Very high
+            // Coherent Teal Intensity Scale Legend: Missing | Zero | Low | Med | High | Very High
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -382,7 +374,7 @@ private fun CalendarHeatmapCard(
                 Text(
                     text = "Less",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Slate600,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp
                 )
 
@@ -390,17 +382,18 @@ private fun CalendarHeatmapCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    LegendCell(color = Slate800)
-                    LegendCell(color = Color(0xFF1B4D3E))
-                    LegendCell(color = Color(0xFF2E7D32))
-                    LegendCell(color = Color(0xFF4CAF50))
-                    LegendCell(color = Color(0xFF69F0AE))
+                    LegendCell(color = npColors.heatmapMissing)
+                    LegendCell(color = npColors.heatmapZero)
+                    LegendCell(color = npColors.heatmapVeryLow)
+                    LegendCell(color = npColors.heatmapLow)
+                    LegendCell(color = npColors.heatmapMedium)
+                    LegendCell(color = npColors.heatmapHigh)
                 }
 
                 Text(
                     text = "More",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Slate600,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp
                 )
             }
@@ -418,16 +411,20 @@ private fun LegendCell(color: Color) {
     )
 }
 
-private fun getHeatmapCellColor(entity: DailyUsageEntity?, bytes: Long): Color {
-    if (entity == null) return Slate800 // Neutral dark gray for unavailable/unrecorded days
-    if (bytes <= 0L) return Slate700 // Recorded 0 bytes
+private fun getHeatmapCellColor(
+    entity: DailyUsageEntity?,
+    bytes: Long,
+    npColors: NetPulseExtendedColors
+): Color {
+    if (entity == null) return npColors.heatmapMissing
+    if (bytes <= 0L) return npColors.heatmapZero
 
     val mb = bytes / (1024.0 * 1024.0)
     return when {
-        mb < 50.0 -> Color(0xFF1B4D3E)       // Level 1: Low (< 50 MB)
-        mb < 200.0 -> Color(0xFF2E7D32)      // Level 2: Medium (50 - 200 MB)
-        mb < 500.0 -> Color(0xFF4CAF50)      // Level 3: High (200 - 500 MB)
-        else -> Color(0xFF69F0AE)            // Level 4: Very High (> 500 MB)
+        mb < 50.0 -> npColors.heatmapVeryLow
+        mb < 200.0 -> npColors.heatmapLow
+        mb < 500.0 -> npColors.heatmapMedium
+        else -> npColors.heatmapHigh
     }
 }
 
@@ -437,21 +434,21 @@ private fun DailyTableHeaderRow() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(DarkSurface)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = "Date",
             style = MaterialTheme.typography.labelMedium,
-            color = Slate400,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1.3f)
         )
         Text(
             text = "Mobile",
             style = MaterialTheme.typography.labelMedium,
-            color = Slate400,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
@@ -459,7 +456,7 @@ private fun DailyTableHeaderRow() {
         Text(
             text = "Wi-Fi",
             style = MaterialTheme.typography.labelMedium,
-            color = Slate400,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
@@ -467,7 +464,7 @@ private fun DailyTableHeaderRow() {
         Text(
             text = "Total",
             style = MaterialTheme.typography.labelMedium,
-            color = Slate400,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1.1f)
@@ -480,6 +477,7 @@ private fun DailyTableRow(
     cell: DayHeatmapCell,
     onClick: () -> Unit
 ) {
+    val npColors = LocalNetPulseColors.current
     val entity = cell.entity
     val isToday = cell.isToday
 
@@ -487,10 +485,14 @@ private fun DailyTableRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isToday) Cyan400.copy(alpha = 0.08f) else DarkSurface.copy(alpha = 0.5f))
+            .background(
+                if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+            )
             .border(
                 1.dp,
-                if (isToday) Cyan400.copy(alpha = 0.35f) else DarkCardBorder.copy(alpha = 0.5f),
+                if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                 RoundedCornerShape(8.dp)
             )
             .clickable(onClick = onClick)
@@ -502,7 +504,7 @@ private fun DailyTableRow(
             Text(
                 text = if (isToday) "Today" else cell.displayDate,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isToday) Cyan400 else Color.White,
+                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium
             )
         }
@@ -511,7 +513,7 @@ private fun DailyTableRow(
         Text(
             text = if (entity != null) entity.formattedMobile else "—",
             style = MaterialTheme.typography.bodyMedium,
-            color = if (entity != null && entity.totalMobileBytes > 0) Emerald400 else Slate400,
+            color = if (entity != null && entity.totalMobileBytes > 0) npColors.upload else MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
@@ -520,7 +522,7 @@ private fun DailyTableRow(
         Text(
             text = if (entity != null) entity.formattedWifi else "—",
             style = MaterialTheme.typography.bodyMedium,
-            color = if (entity != null && entity.totalWifiBytes > 0) Cyan400 else Slate400,
+            color = if (entity != null && entity.totalWifiBytes > 0) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
@@ -529,7 +531,7 @@ private fun DailyTableRow(
         Text(
             text = if (entity != null) entity.formattedTotal else "—",
             style = MaterialTheme.typography.bodyMedium,
-            color = if (entity != null && entity.totalAllBytes > 0) Color.White else Slate600,
+            color = if (entity != null && entity.totalAllBytes > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1.1f)
@@ -539,6 +541,7 @@ private fun DailyTableRow(
 
 @Composable
 private fun MonthlySummaryCard(daysList: List<DayHeatmapCell>) {
+    val npColors = LocalNetPulseColors.current
     var totalMobile = 0L
     var totalWifi = 0L
     var activeDays = 0
@@ -555,15 +558,15 @@ private fun MonthlySummaryCard(daysList: List<DayHeatmapCell>) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "90-Day Usage Summary",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -572,9 +575,9 @@ private fun MonthlySummaryCard(daysList: List<DayHeatmapCell>) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SummaryItem(title = "Mobile Data", value = NetworkUtils.formatBytes(totalMobile), color = Emerald400)
-                SummaryItem(title = "Wi-Fi Data", value = NetworkUtils.formatBytes(totalWifi), color = Cyan400)
-                SummaryItem(title = "Combined Total", value = NetworkUtils.formatBytes(combinedTotal), color = Color.White)
+                SummaryItem(title = "Mobile Data", value = NetworkUtils.formatBytes(totalMobile), color = npColors.upload)
+                SummaryItem(title = "Wi-Fi Data", value = NetworkUtils.formatBytes(totalWifi), color = npColors.download)
+                SummaryItem(title = "Combined Total", value = NetworkUtils.formatBytes(combinedTotal), color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -583,7 +586,7 @@ private fun MonthlySummaryCard(daysList: List<DayHeatmapCell>) {
 @Composable
 private fun SummaryItem(title: String, value: String, color: Color) {
     Column {
-        Text(text = title, style = MaterialTheme.typography.labelSmall, color = Slate400)
+        Text(text = title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(4.dp))
         Text(text = value, style = MaterialTheme.typography.bodyLarge, color = color, fontWeight = FontWeight.Bold)
     }
@@ -594,6 +597,7 @@ private fun UsageDetailDialog(
     cell: DayHeatmapCell,
     onDismiss: () -> Unit
 ) {
+    val npColors = LocalNetPulseColors.current
     val entity = cell.entity
 
     AlertDialog(
@@ -603,13 +607,13 @@ private fun UsageDetailDialog(
                 Text(
                     text = "Usage Details",
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = cell.displayDate,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Cyan400
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         },
@@ -619,32 +623,32 @@ private fun UsageDetailDialog(
                     Text(
                         text = "Historical statistics were not recorded or are unavailable from the Android operating system for this date.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Slate400
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     // Mobile Data Breakdown
                     UsageDetailSection(
                         title = "Mobile Data",
                         icon = Icons.Default.CellTower,
-                        accentColor = Emerald400,
+                        accentColor = npColors.upload,
                         total = entity.formattedMobile,
                         rx = NetworkUtils.formatBytes(entity.mobileRxBytes),
                         tx = NetworkUtils.formatBytes(entity.mobileTxBytes)
                     )
 
-                    HorizontalDivider(color = DarkCardBorder)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
                     // Wi-Fi Breakdown
                     UsageDetailSection(
                         title = "Wi-Fi Data",
                         icon = Icons.Default.SignalWifi4Bar,
-                        accentColor = Cyan400,
+                        accentColor = npColors.download,
                         total = entity.formattedWifi,
                         rx = NetworkUtils.formatBytes(entity.wifiRxBytes),
                         tx = NetworkUtils.formatBytes(entity.wifiTxBytes)
                     )
 
-                    HorizontalDivider(color = DarkCardBorder)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
                     // Combined
                     Row(
@@ -654,13 +658,13 @@ private fun UsageDetailDialog(
                         Text(
                             text = "Combined Total",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = entity.formattedTotal,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -669,10 +673,10 @@ private fun UsageDetailDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = "Close", color = Cyan400)
+                Text(text = "Close", color = MaterialTheme.colorScheme.primary)
             }
         },
-        containerColor = DarkSurface
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -694,7 +698,7 @@ private fun UsageDetailSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = title, style = MaterialTheme.typography.bodyMedium, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
             }
             Text(text = total, style = MaterialTheme.typography.bodyMedium, color = accentColor, fontWeight = FontWeight.Bold)
         }
@@ -703,8 +707,8 @@ private fun UsageDetailSection(
             modifier = Modifier.fillMaxWidth().padding(start = 22.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = "↓ Download: $rx", style = MaterialTheme.typography.bodySmall, color = Slate400)
-            Text(text = "↑ Upload: $tx", style = MaterialTheme.typography.bodySmall, color = Slate400)
+            Text(text = "↓ Download: $rx", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = "↑ Upload: $tx", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -714,6 +718,8 @@ private fun UsagePermissionRequiredCard(
     onRequestUsageAccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val npColors = LocalNetPulseColors.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -723,8 +729,8 @@ private fun UsagePermissionRequiredCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp)),
-            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(
@@ -735,13 +741,13 @@ private fun UsagePermissionRequiredCard(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(Amber500.copy(alpha = 0.15f)),
+                        .background(npColors.warning.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Permission Required",
-                        tint = Amber500,
+                        tint = npColors.warning,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -751,7 +757,7 @@ private fun UsagePermissionRequiredCard(
                 Text(
                     text = "Usage Access Required",
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
 
@@ -760,7 +766,7 @@ private fun UsagePermissionRequiredCard(
                 Text(
                     text = "Android requires the 'Usage Access' permission to query NetworkStatsManager for daily Wi-Fi and mobile data statistics.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Slate400,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
 
@@ -768,12 +774,14 @@ private fun UsagePermissionRequiredCard(
 
                 Button(
                     onClick = onRequestUsageAccess,
-                    colors = ButtonDefaults.buttonColors(containerColor = Cyan400),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
                         text = "Grant Usage Access",
-                        color = DarkBackground,
                         fontWeight = FontWeight.SemiBold
                     )
                 }

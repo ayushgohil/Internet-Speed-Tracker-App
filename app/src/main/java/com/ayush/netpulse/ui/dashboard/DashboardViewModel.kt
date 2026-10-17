@@ -96,7 +96,8 @@ class DashboardViewModel(
             it.copy(
                 showSpeedInStatusBar = preferencesManager.showSpeedInStatusBar,
                 speedUnitPreference = preferencesManager.speedUnitPreference,
-                notificationStyle = preferencesManager.notificationStyle
+                notificationStyle = preferencesManager.notificationStyle,
+                appTheme = preferencesManager.appTheme
             )
         }
 
@@ -323,6 +324,11 @@ class DashboardViewModel(
         if (_uiState.value.isBackgroundServiceRunning) {
             SpeedTrackerService.start(context)
         }
+    }
+
+    fun setAppThemePreference(theme: String) {
+        preferencesManager.appTheme = theme
+        _uiState.update { it.copy(appTheme = theme) }
     }
 
     fun triggerManualReconciliation() {

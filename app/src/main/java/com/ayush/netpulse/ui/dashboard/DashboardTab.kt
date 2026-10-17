@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CellTower
@@ -48,15 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.model.NetworkType
-import com.ayush.netpulse.ui.theme.Blue400
-import com.ayush.netpulse.ui.theme.Cyan400
-import com.ayush.netpulse.ui.theme.DarkBackground
-import com.ayush.netpulse.ui.theme.DarkCardBorder
-import com.ayush.netpulse.ui.theme.DarkSurface
-import com.ayush.netpulse.ui.theme.Emerald400
-import com.ayush.netpulse.ui.theme.Slate400
-import com.ayush.netpulse.ui.theme.Slate600
-import com.ayush.netpulse.ui.theme.Slate800
+import com.ayush.netpulse.ui.theme.LocalNetPulseColors
 
 @Composable
 fun DashboardTab(
@@ -68,10 +59,12 @@ fun DashboardTab(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val npColors = LocalNetPulseColors.current
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -111,7 +104,7 @@ fun DashboardTab(
             Text(
                 text = "Today's Usage",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 2.dp)
             )
@@ -124,7 +117,7 @@ fun DashboardTab(
                     title = "Mobile Data",
                     usageFormatted = uiState.dailyUsage.formattedMobile,
                     icon = Icons.Default.CellTower,
-                    accentColor = Emerald400,
+                    accentColor = npColors.upload,
                     onClick = onNavigateToUsage,
                     modifier = Modifier.weight(1f)
                 )
@@ -133,7 +126,7 @@ fun DashboardTab(
                     title = "Wi-Fi",
                     usageFormatted = uiState.dailyUsage.formattedWifi,
                     icon = Icons.Default.SignalWifi4Bar,
-                    accentColor = Cyan400,
+                    accentColor = npColors.download,
                     onClick = onNavigateToUsage,
                     modifier = Modifier.weight(1f)
                 )
@@ -145,8 +138,8 @@ fun DashboardTab(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column {
@@ -154,7 +147,7 @@ fun DashboardTab(
                         title = "View Usage History",
                         subtitle = "Last 90 days heatmap & analytics",
                         icon = Icons.Default.DataUsage,
-                        iconTint = Cyan400,
+                        iconTint = npColors.download,
                         onClick = onNavigateToUsage
                     )
 
@@ -162,14 +155,14 @@ fun DashboardTab(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(1.dp)
-                            .background(DarkCardBorder)
+                            .background(MaterialTheme.colorScheme.outline)
                     )
 
                     ShortcutRow(
                         title = "View Speed Logs",
                         subtitle = "Detailed speed sample records",
                         icon = Icons.Default.History,
-                        iconTint = Blue400,
+                        iconTint = npColors.upload,
                         onClick = onNavigateToLogs
                     )
                 }
@@ -188,6 +181,8 @@ private fun DashboardHeader(
     onToggleMonitoring: () -> Unit = {},
     onOpenSettings: () -> Unit
 ) {
+    val npColors = LocalNetPulseColors.current
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -197,7 +192,7 @@ private fun DashboardHeader(
             Text(
                 text = "NetPulse",
                 style = MaterialTheme.typography.headlineLarge,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -206,13 +201,16 @@ private fun DashboardHeader(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(if (isMonitoringActive) Emerald400.copy(alpha = 0.15f) else Slate800)
+                    .background(
+                        if (isMonitoringActive) npColors.download.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    )
                     .clickable(onClick = onToggleMonitoring)
                     .padding(horizontal = 10.dp, vertical = 5.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val dotColor by animateColorAsState(
-                        targetValue = if (isMonitoringActive) Emerald400 else Slate600,
+                        targetValue = if (isMonitoringActive) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
                         label = "dotColor"
                     )
                     Box(
@@ -225,7 +223,7 @@ private fun DashboardHeader(
                     Text(
                         text = if (isMonitoringActive) "Monitoring Active" else "Paused",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isMonitoringActive) Emerald400 else Slate400,
+                        color = if (isMonitoringActive) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -238,12 +236,13 @@ private fun DashboardHeader(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(DarkSurface)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
         ) {
             Icon(
                 imageVector = Icons.Default.Settings,
                 contentDescription = "Settings",
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -255,16 +254,18 @@ private fun SpeedDualCard(
     downloadFormatted: String,
     uploadFormatted: String
 ) {
+    val npColors = LocalNetPulseColors.current
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Download Speed Card
+        // Download Speed Card (Strongest visual element in hierarchy)
         Card(
             modifier = Modifier
                 .weight(1f)
-                .border(1.dp, Cyan400.copy(alpha = 0.3f), RoundedCornerShape(20.dp)),
-            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                .border(1.dp, npColors.download.copy(alpha = 0.35f), RoundedCornerShape(20.dp)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(
@@ -276,13 +277,13 @@ private fun SpeedDualCard(
                         modifier = Modifier
                             .size(28.dp)
                             .clip(CircleShape)
-                            .background(Cyan400.copy(alpha = 0.15f)),
+                            .background(npColors.download.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowDownward,
                             contentDescription = "Download",
-                            tint = Cyan400,
+                            tint = npColors.download,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -290,7 +291,7 @@ private fun SpeedDualCard(
                     Text(
                         text = "Download",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Slate400
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -298,20 +299,20 @@ private fun SpeedDualCard(
 
                 Text(
                     text = downloadFormatted,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = npColors.download,
                     fontWeight = FontWeight.Bold,
                     fontSize = 24.sp
                 )
             }
         }
 
-        // Upload Speed Card
+        // Upload Speed Card (Prominent but slightly secondary)
         Card(
             modifier = Modifier
                 .weight(1f)
-                .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp)),
-            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                .border(1.dp, npColors.upload.copy(alpha = 0.25f), RoundedCornerShape(20.dp)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(
@@ -323,13 +324,13 @@ private fun SpeedDualCard(
                         modifier = Modifier
                             .size(28.dp)
                             .clip(CircleShape)
-                            .background(Emerald400.copy(alpha = 0.15f)),
+                            .background(npColors.upload.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowUpward,
                             contentDescription = "Upload",
-                            tint = Emerald400,
+                            tint = npColors.upload,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -337,7 +338,7 @@ private fun SpeedDualCard(
                     Text(
                         text = "Upload",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Slate400
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -346,8 +347,8 @@ private fun SpeedDualCard(
                 Text(
                     text = uploadFormatted,
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
+                    color = npColors.upload,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 24.sp
                 )
             }
@@ -357,20 +358,22 @@ private fun SpeedDualCard(
 
 @Composable
 private fun NetworkConnectionBar(networkType: NetworkType) {
+    val npColors = LocalNetPulseColors.current
+
     val (icon, tint, label) = when (networkType) {
-        NetworkType.WIFI -> Triple(Icons.Default.SignalWifi4Bar, Cyan400, "Connected: Wi-Fi")
-        NetworkType.CELLULAR -> Triple(Icons.Default.CellTower, Emerald400, "Connected: Mobile Data")
-        NetworkType.ETHERNET -> Triple(Icons.Default.SignalWifi4Bar, Cyan400, "Connected: Ethernet")
-        NetworkType.DISCONNECTED -> Triple(Icons.Default.SignalWifiOff, Slate400, "Offline / Disconnected")
-        NetworkType.UNKNOWN -> Triple(Icons.Default.SignalWifi4Bar, Slate400, "Network Connecting...")
+        NetworkType.WIFI -> Triple(Icons.Default.SignalWifi4Bar, npColors.download, "Connected: Wi-Fi")
+        NetworkType.CELLULAR -> Triple(Icons.Default.CellTower, npColors.upload, "Connected: Mobile Data")
+        NetworkType.ETHERNET -> Triple(Icons.Default.SignalWifi4Bar, npColors.download, "Connected: Ethernet")
+        NetworkType.DISCONNECTED -> Triple(Icons.Default.SignalWifiOff, MaterialTheme.colorScheme.onSurfaceVariant, "Offline / Disconnected")
+        NetworkType.UNKNOWN -> Triple(Icons.Default.SignalWifi4Bar, MaterialTheme.colorScheme.onSurfaceVariant, "Network Connecting...")
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(DarkSurface)
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -384,7 +387,7 @@ private fun NetworkConnectionBar(networkType: NetworkType) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (networkType == NetworkType.DISCONNECTED) Slate400 else Color.White,
+                color = if (networkType == NetworkType.DISCONNECTED) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -401,10 +404,10 @@ private fun BackgroundMonitoringControlCard(
             .fillMaxWidth()
             .border(
                 1.dp,
-                if (isRunning) Cyan400.copy(alpha = 0.4f) else DarkCardBorder,
+                if (isRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline,
                 RoundedCornerShape(16.dp)
             ),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
@@ -418,23 +421,23 @@ private fun BackgroundMonitoringControlCard(
                 Text(
                     text = "Background Monitoring",
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "Keeps tracking even when app is closed",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate400
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Switch(
                 checked = isRunning,
                 onCheckedChange = { onToggle() },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = DarkBackground,
-                    checkedTrackColor = Cyan400,
-                    uncheckedThumbColor = Slate400,
-                    uncheckedTrackColor = Slate800
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             )
         }
@@ -452,9 +455,9 @@ private fun TodayDataCard(
 ) {
     Card(
         modifier = modifier
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
@@ -476,13 +479,13 @@ private fun TodayDataCard(
                     Text(
                         text = title,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Slate400
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = Slate600,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -492,7 +495,7 @@ private fun TodayDataCard(
             Text(
                 text = usageFormatted,
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp
             )
@@ -536,13 +539,13 @@ private fun ShortcutRow(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate400
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -550,7 +553,7 @@ private fun ShortcutRow(
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = null,
-            tint = Slate600,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp)
         )
     }

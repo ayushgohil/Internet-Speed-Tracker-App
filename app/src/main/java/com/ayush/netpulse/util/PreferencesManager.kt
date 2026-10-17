@@ -100,8 +100,13 @@ class PreferencesManager(context: Context) {
         get() = prefs.getString(KEY_CACHED_TODAY_DATE, null)
         set(value) = prefs.edit().putString(KEY_CACHED_TODAY_DATE, value).apply()
 
+    var appTheme: String
+        get() = prefs.getString(KEY_APP_THEME, "Dark") ?: "Dark"
+        set(value) = prefs.edit().putString(KEY_APP_THEME, value).apply()
+
     companion object {
         private const val PREFS_NAME = "netpulse_preferences"
+        private const val KEY_APP_THEME = "key_app_theme"
         private const val KEY_BACKGROUND_MONITORING = "key_background_monitoring"
         private const val KEY_LAST_RECONCILED_DATE = "key_last_reconciled_date"
         private const val KEY_LAST_RECONCILED_TIMESTAMP = "key_last_reconciled_timestamp"

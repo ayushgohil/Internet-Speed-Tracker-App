@@ -22,10 +22,6 @@ import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.logs.LogsTab
 import com.ayush.netpulse.ui.navigation.NavScreen
 import com.ayush.netpulse.ui.settings.SettingsScreen
-import com.ayush.netpulse.ui.theme.Cyan400
-import com.ayush.netpulse.ui.theme.DarkBackground
-import com.ayush.netpulse.ui.theme.DarkSurface
-import com.ayush.netpulse.ui.theme.Slate400
 import com.ayush.netpulse.ui.usage.UsageTab
 
 @Composable
@@ -42,6 +38,7 @@ fun MainScreen(
     onToggleSpeedInStatusBar: () -> Unit = {},
     onSetSpeedUnit: (String) -> Unit = {},
     onSetNotificationStyle: (String) -> Unit = {},
+    onSetAppTheme: (String) -> Unit = {},
     onReconcileUsage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -57,6 +54,7 @@ fun MainScreen(
             onToggleSpeedInStatusBar = onToggleSpeedInStatusBar,
             onSetSpeedUnit = onSetSpeedUnit,
             onSetNotificationStyle = onSetNotificationStyle,
+            onSetAppTheme = onSetAppTheme,
             onRequestUsageAccess = onRequestUsageAccess,
             onRequestNotificationPermission = onRequestNotificationPermission,
             onRequestBatteryOptimization = onRequestBatteryOptimization,
@@ -68,10 +66,10 @@ fun MainScreen(
     } else {
         Scaffold(
             modifier = modifier.fillMaxSize(),
-            containerColor = DarkBackground,
+            containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 NavigationBar(
-                    containerColor = DarkSurface,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 8.dp
                 ) {
                     NavScreen.values().forEach { screen ->
@@ -92,11 +90,11 @@ fun MainScreen(
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = DarkBackground,
-                                selectedTextColor = Cyan400,
-                                indicatorColor = Cyan400,
-                                unselectedIconColor = Slate400,
-                                unselectedTextColor = Slate400
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
                     }

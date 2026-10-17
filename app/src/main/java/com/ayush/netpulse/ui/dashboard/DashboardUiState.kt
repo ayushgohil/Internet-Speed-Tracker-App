@@ -24,5 +24,6 @@ data class DashboardUiState(
     val showSpeedInStatusBar: Boolean = false,
     val speedUnitPreference: String = "Auto",
     val notificationStyle: String = "Minimal",
+    val appTheme: String = "Dark",
     val isReconcilingUsage: Boolean = false
 )

@@ -48,15 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.local.SpeedRecordEntity
-import com.ayush.netpulse.ui.theme.Cyan400
-import com.ayush.netpulse.ui.theme.DarkBackground
-import com.ayush.netpulse.ui.theme.DarkCardBorder
-import com.ayush.netpulse.ui.theme.DarkSurface
-import com.ayush.netpulse.ui.theme.Emerald400
-import com.ayush.netpulse.ui.theme.Rose500
-import com.ayush.netpulse.ui.theme.Slate400
-import com.ayush.netpulse.ui.theme.Slate600
-import com.ayush.netpulse.ui.theme.Slate800
+import com.ayush.netpulse.ui.theme.LocalNetPulseColors
 import com.ayush.netpulse.util.NetworkUtils
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -68,6 +60,7 @@ fun LogsTab(
     onClearLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val netPulseColors = LocalNetPulseColors.current
     var selectedFilter by remember { mutableStateOf("ALL") }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
 
@@ -85,11 +78,17 @@ fun LogsTab(
     if (showClearConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showClearConfirmDialog = false },
-            title = { Text("Clear Speed Logs?", color = Color.White) },
+            title = {
+                Text(
+                    text = "Clear Speed Logs?",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
                 Text(
-                    "This will delete all saved speed test records. Daily usage statistics will be preserved.",
-                    color = Slate400
+                    text = "This will delete all saved speed test records. Daily usage statistics will be preserved.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             confirmButton = {
@@ -99,22 +98,29 @@ fun LogsTab(
                         showClearConfirmDialog = false
                     }
                 ) {
-                    Text("Clear All", color = Rose500, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Clear All",
+                        color = netPulseColors.error,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearConfirmDialog = false }) {
-                    Text("Cancel", color = Slate400)
+                    Text(
+                        text = "Cancel",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             },
-            containerColor = DarkSurface
+            containerColor = MaterialTheme.colorScheme.surface
         )
     }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -130,13 +136,13 @@ fun LogsTab(
                     Text(
                         text = "Speed Logs",
                         style = MaterialTheme.typography.headlineLarge,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "${records.size} samples recorded locally",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate400
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -146,12 +152,13 @@ fun LogsTab(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(DarkSurface)
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, netPulseColors.cardBorder, CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
                             contentDescription = "Clear Logs",
-                            tint = Rose500,
+                            tint = netPulseColors.error,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -178,19 +185,19 @@ fun LogsTab(
                             Text(
                                 text = label,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (isSelected) DarkBackground else Color.White,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan400,
-                            containerColor = DarkSurface
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = isSelected,
-                            borderColor = if (isSelected) Cyan400 else DarkCardBorder,
-                            selectedBorderColor = Cyan400
+                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else netPulseColors.cardBorder,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary
                         ),
                         shape = RoundedCornerShape(20.dp)
                     )
@@ -218,6 +225,7 @@ fun LogsTab(
 
 @Composable
 private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
+    val netPulseColors = LocalNetPulseColors.current
     val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
     val timeStr = timeFormat.format(Date(record.timestamp))
@@ -231,8 +239,8 @@ private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(DarkSurface)
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, netPulseColors.cardBorder, RoundedCornerShape(10.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -245,9 +253,9 @@ private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
                     .clip(CircleShape)
                     .background(
                         when {
-                            isWifi -> Cyan400.copy(alpha = 0.12f)
-                            isCellular -> Emerald400.copy(alpha = 0.12f)
-                            else -> Slate800
+                            isWifi -> netPulseColors.download.copy(alpha = 0.15f)
+                            isCellular -> netPulseColors.upload.copy(alpha = 0.15f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -260,9 +268,9 @@ private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
                     },
                     contentDescription = null,
                     tint = when {
-                        isWifi -> Cyan400
-                        isCellular -> Emerald400
-                        else -> Slate400
+                        isWifi -> netPulseColors.download
+                        isCellular -> netPulseColors.upload
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     modifier = Modifier.size(15.dp)
                 )
@@ -274,13 +282,13 @@ private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
                 Text(
                     text = timeStr,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "$dateStr • ${if (isWifi) "Wi-Fi" else if (isCellular) "Mobile" else "Offline"}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Slate400
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -294,14 +302,14 @@ private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
                 Icon(
                     imageVector = Icons.Default.ArrowDownward,
                     contentDescription = "Download",
-                    tint = Cyan400,
+                    tint = netPulseColors.download,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = NetworkUtils.formatSpeed(record.downloadBps),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -310,14 +318,14 @@ private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
                 Icon(
                     imageVector = Icons.Default.ArrowUpward,
                     contentDescription = "Upload",
-                    tint = Emerald400,
+                    tint = netPulseColors.upload,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = NetworkUtils.formatSpeed(record.uploadBps),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Slate400
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -326,11 +334,12 @@ private fun CompactSpeedRecordRow(record: SpeedRecordEntity) {
 
 @Composable
 private fun EmptyLogsCard(filterActive: Boolean) {
+    val netPulseColors = LocalNetPulseColors.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            .border(1.dp, netPulseColors.cardBorder, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
@@ -343,13 +352,13 @@ private fun EmptyLogsCard(filterActive: Boolean) {
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(Slate800),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.History,
                     contentDescription = null,
-                    tint = Slate400,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -359,7 +368,7 @@ private fun EmptyLogsCard(filterActive: Boolean) {
             Text(
                 text = if (filterActive) "No Matching Logs" else "No Speed Logs Yet",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
 
@@ -372,9 +381,10 @@ private fun EmptyLogsCard(filterActive: Boolean) {
                     "Active internet speeds will be logged here automatically when monitoring is active."
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate400,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
         }
     }
 }
+

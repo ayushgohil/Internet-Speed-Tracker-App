@@ -37,9 +37,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            NetPulseTheme {
-                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+            NetPulseTheme(appTheme = uiState.appTheme) {
                 MainScreen(
                     uiState = uiState,
                     onToggleMonitoring = { viewModel.toggleMonitoring() },
@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
                     onToggleSpeedInStatusBar = { viewModel.toggleShowSpeedInStatusBar() },
                     onSetSpeedUnit = { unit -> viewModel.setSpeedUnitPreference(unit) },
                     onSetNotificationStyle = { style -> viewModel.setNotificationStylePreference(style) },
+                    onSetAppTheme = { theme -> viewModel.setAppThemePreference(theme) },
                     onReconcileUsage = { viewModel.triggerManualReconciliation() }
                 )
             }
