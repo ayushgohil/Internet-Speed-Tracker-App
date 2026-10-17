@@ -10,15 +10,16 @@ import androidx.core.graphics.drawable.IconCompat
 import kotlin.math.roundToInt
 
 /**
- * Generates an ultra-legible monochrome status bar speed icon.
+ * Generates an ultra-legible, two-row monochrome status bar speed icon matching
+ * the classic internet speed meter layout (number on top, unit on bottom).
  *
  * Requirements addressed:
- * - Highly visible, bold monochrome label tinted by Android SystemUI.
- * - Short values without tiny decimals: "0", "12K", "300K", "1M", "15M".
- * - Canvas size 96x96 with maximized font size and centered bounds.
- * - Zero clipping across single-char ("0") to 4-char ("300K") values.
- * - In-memory caching to avoid rebuilding identical bitmaps.
- * - Safe exception handling returning null to trigger fallback to standard app icon.
+ * - Two-row layout: bold centered numeric value on top, compact unit ("KB/s" or "MB/s") below.
+ * - Purely numeric values: never displays decimals like "0.2K" or "0.8K" for sub-KB traffic.
+ *   Sub-KB values round cleanly to 0 or 1 without decimals.
+ * - Zero clipping across single digit ("0"), double digit ("84"), and triple digit ("300") speeds.
+ * - Perfectly centered vertically and horizontally within 96x96 px monochrome alpha mask.
+ * - In-memory caching for zero allocations when speed representation is unchanged.
  */
 object SpeedIconGenerator {
 
@@ -26,49 +27,58 @@ object SpeedIconGenerator {
     private var lastFormattedText: String = ""
     private var lastCachedIcon: IconCompat? = null
 
+    data class SpeedComponents(
+        val value: String,
+        val unit: String
+    )
+
     /**
-     * Formats bytes per second into an ultra-compact 1-4 character string:
-     * Examples:
-     * - 0 B/s -> "0"
-     * - 50 B/s -> "0"
-     * - 300 B/s -> "0.3K" (prevents premature zero rounding for small active traffic)
-     * - 800 B/s -> "0.8K"
-     * - 12 KB/s -> "12K"
-     * - 300 KB/s -> "300K"
-     * - 950 KB/s -> "950K"
-     * - 1.2 MB/s -> "1M" (no tiny dot or unreadable decimals for MB)
-     * - 15.6 MB/s -> "16M"
+     * Splits speed into a purely numeric value and standard unit ("KB/s" or "MB/s").
+     * No decimal places are shown (e.g., 0.2 KB/s -> "0", 84 KB/s -> "84", 1.2 MB/s -> "1").
      */
-    fun formatCompactSpeed(bytesPerSec: Long): String {
-        if (bytesPerSec <= 0L) return "0"
+    fun getSpeedComponents(bytesPerSec: Long): SpeedComponents {
+        if (bytesPerSec <= 0L) return SpeedComponents("0", "KB/s")
+
         val kbDouble = bytesPerSec / 1024.0
-        val kbInt = kbDouble.toInt()
         return when {
-            kbInt >= 1000 -> {
+            kbDouble >= 1000.0 -> {
                 val mb = (kbDouble / 1024.0).roundToInt().coerceAtLeast(1)
-                "${mb}M"
+                SpeedComponents("$mb", "MB/s")
             }
-            kbInt >= 1 -> "${kbInt}K"
-            kbDouble >= 0.1 -> {
-                // Between 102 B/s and 1023 B/s: display "0.X K" (e.g. "0.3K") so small active traffic doesn't show 0
-                val tenth = (kbDouble * 10).roundToInt()
-                if (tenth >= 10) "1K" else "0.${tenth}K"
+            else -> {
+                val kb = kbDouble.roundToInt()
+                SpeedComponents("$kb", "KB/s")
             }
-            else -> "0"
         }
     }
 
     /**
-     * Generates a monochrome IconCompat containing the current speed label.
-     * Caches the IconCompat if the text representation has not changed.
-     * Returns null if generation fails, allowing automatic fallback to the standard icon.
+     * Formats bytes per second into a compact string representation.
+     * Guaranteed purely numeric (no decimals like "0.2K"):
+     * Examples:
+     * - 0 B/s -> "0"
+     * - 200 B/s -> "0"
+     * - 800 B/s -> "1K"
+     * - 12 KB/s -> "12K"
+     * - 84 KB/s -> "84K"
+     * - 300 KB/s -> "300K"
+     * - 1.2 MB/s -> "1M"
+     */
+    fun formatCompactSpeed(bytesPerSec: Long): String {
+        val comp = getSpeedComponents(bytesPerSec)
+        return if (comp.value == "0") "0" else "${comp.value}${if (comp.unit == "MB/s") "M" else "K"}"
+    }
+
+    /**
+     * Generates a monochrome IconCompat containing the current speed indicator
+     * rendered in 2 stacked rows (Number on top, Unit below).
      */
     @Synchronized
     fun createSpeedIcon(bytesPerSec: Long): IconCompat? {
-        val text = formatCompactSpeed(bytesPerSec)
+        val comp = getSpeedComponents(bytesPerSec)
+        val cacheKey = "${comp.value}|${comp.unit}"
 
-        // Cache optimization: Avoid generating new Bitmaps when the text is identical
-        if (text == lastFormattedText && lastCachedIcon != null) {
+        if (cacheKey == lastFormattedText && lastCachedIcon != null) {
             return lastCachedIcon
         }
 
@@ -76,30 +86,50 @@ object SpeedIconGenerator {
             val bitmap = Bitmap.createBitmap(BITMAP_SIZE, BITMAP_SIZE, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
 
-            val paint = Paint().apply {
-                color = Color.WHITE // Monochrome alpha mask for system status bar tinting
+            val numberPaint = Paint().apply {
+                color = Color.WHITE
                 isAntiAlias = true
+                isSubpixelText = true
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 textAlign = Paint.Align.CENTER
-                // Maximized font sizing tailored to string length to prevent clipping and maximize legibility
-                textSize = when (text.length) {
-                    1 -> 68f // "0"
-                    2 -> 56f // "1M", "9K"
-                    3 -> 48f // "12K", "15M"
-                    else -> 38f // "300K", "999K", "100M"
+                textSize = when (comp.value.length) {
+                    1 -> 54f // "0", "5"
+                    2 -> 50f // "84", "15"
+                    3 -> 42f // "300", "999"
+                    else -> 34f
                 }
             }
 
-            // Calculate precise vertical centering using font bounds
-            val textBounds = Rect()
-            paint.getTextBounds(text, 0, text.length, textBounds)
-            val x = BITMAP_SIZE / 2f
-            val y = (BITMAP_SIZE / 2f) + (textBounds.height() / 2f) - textBounds.bottom
+            val unitPaint = Paint().apply {
+                color = Color.WHITE
+                isAntiAlias = true
+                isSubpixelText = true
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+                textSize = 26f // "KB/s" or "MB/s"
+            }
 
-            canvas.drawText(text, x, y, paint)
+            val numBounds = Rect()
+            numberPaint.getTextBounds(comp.value, 0, comp.value.length, numBounds)
+            val h1 = numBounds.height().toFloat()
+
+            val unitBounds = Rect()
+            unitPaint.getTextBounds(comp.unit, 0, comp.unit.length, unitBounds)
+            val h2 = unitBounds.height().toFloat()
+
+            val gap = 4f
+            val totalHeight = h1 + gap + h2
+
+            val topY = (BITMAP_SIZE - totalHeight) / 2f
+            val y1 = topY - numBounds.top.toFloat()
+            val y2 = topY + h1 + gap - unitBounds.top.toFloat()
+            val x = BITMAP_SIZE / 2f
+
+            canvas.drawText(comp.value, x, y1, numberPaint)
+            canvas.drawText(comp.unit, x, y2, unitPaint)
 
             val iconCompat = IconCompat.createWithBitmap(bitmap)
-            lastFormattedText = text
+            lastFormattedText = cacheKey
             lastCachedIcon = iconCompat
             iconCompat
         } catch (e: Throwable) {
@@ -116,3 +146,4 @@ object SpeedIconGenerator {
         lastCachedIcon = null
     }
 }
+

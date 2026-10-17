@@ -21,13 +21,15 @@ class Phase8VerificationTest {
         assertEquals("0", SpeedIconGenerator.formatCompactSpeed(0L))
         assertEquals("0", SpeedIconGenerator.formatCompactSpeed(-500L))
 
-        // Sub-KB (< 1024 bytes, above 100 B/s displays tenths to prevent premature zero)
+        // Sub-KB (< 1024 bytes): pure numeric without decimals (e.g. 0.2 KB/s -> 0, 0.8 KB/s -> 1K)
         assertEquals("0", SpeedIconGenerator.formatCompactSpeed(50L))
-        assertEquals("0.5K", SpeedIconGenerator.formatCompactSpeed(500L))
-        assertEquals("0.8K", SpeedIconGenerator.formatCompactSpeed(800L))
+        assertEquals("0", SpeedIconGenerator.formatCompactSpeed(200L)) // 0.2 KB/s
+        assertEquals("0", SpeedIconGenerator.formatCompactSpeed(500L)) // 0.5 KB/s
+        assertEquals("1K", SpeedIconGenerator.formatCompactSpeed(800L)) // 0.8 KB/s
 
         // Kilobytes (< 1000 KB)
         assertEquals("12K", SpeedIconGenerator.formatCompactSpeed(12 * 1024L))
+        assertEquals("84K", SpeedIconGenerator.formatCompactSpeed(84 * 1024L))
         assertEquals("128K", SpeedIconGenerator.formatCompactSpeed(128 * 1024L))
         assertEquals("300K", SpeedIconGenerator.formatCompactSpeed(300 * 1024L))
         assertEquals("999K", SpeedIconGenerator.formatCompactSpeed(999 * 1024L))
@@ -37,6 +39,19 @@ class Phase8VerificationTest {
         assertEquals("6M", SpeedIconGenerator.formatCompactSpeed((5.6 * 1024 * 1024).toLong()))
         assertEquals("15M", SpeedIconGenerator.formatCompactSpeed(15 * 1024 * 1024L))
         assertEquals("120M", SpeedIconGenerator.formatCompactSpeed(120 * 1024 * 1024L))
+
+        // Test Two-Row components (Number on top, Unit below)
+        val idleComp = SpeedIconGenerator.getSpeedComponents(200L)
+        assertEquals("0", idleComp.value)
+        assertEquals("KB/s", idleComp.unit)
+
+        val referenceComp = SpeedIconGenerator.getSpeedComponents(84 * 1024L)
+        assertEquals("84", referenceComp.value)
+        assertEquals("KB/s", referenceComp.unit)
+
+        val mbComp = SpeedIconGenerator.getSpeedComponents((1.2 * 1024 * 1024).toLong())
+        assertEquals("1", mbComp.value)
+        assertEquals("MB/s", mbComp.unit)
     }
 
     @Test
