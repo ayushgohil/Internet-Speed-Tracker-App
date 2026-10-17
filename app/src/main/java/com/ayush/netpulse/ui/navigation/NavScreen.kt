@@ -6,6 +6,6 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class NavScreen(val title: String, val icon: ImageVector) {
-    DASHBOARD("Dashboard", Icons.Default.Speed),
+    OVERVIEW("Overview", Icons.Default.Speed),
     USAGE("Usage", Icons.Default.DataUsage)
 }

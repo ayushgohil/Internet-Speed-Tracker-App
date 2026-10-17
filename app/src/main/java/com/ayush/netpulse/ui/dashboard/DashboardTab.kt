@@ -22,17 +22,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.DataUsage
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.SignalWifi4Bar
 import androidx.compose.material.icons.filled.SignalWifiOff
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -42,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,504 +54,446 @@ fun DashboardTab(
     onNavigateToUsage: () -> Unit,
     onNavigateToLogs: () -> Unit,
     onOpenSettings: () -> Unit,
+    onRequestUsageAccess: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val npColors = LocalNetPulseColors.current
-
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. HEADER WITH NETPULSE TITLE, MONITORING CHIP, AND SETTINGS ICON
-        item {
-            Spacer(modifier = Modifier.height(10.dp))
-            DashboardHeader(
-                isMonitoringActive = uiState.isBackgroundServiceRunning || uiState.isMonitoringActive,
-                onToggleMonitoring = onToggleMonitoring,
-                onOpenSettings = onOpenSettings
-            )
-        }
-
-        // 2. SPEED HERO CARDS (PROMINENT CURRENT DOWNLOAD & UPLOAD SPEED)
-        item {
-            SpeedDualCard(
+        // 1. UNIFIED LIVE NETWORK ACTIVITY HERO
+        item(key = "live_speed_hero") {
+            LiveSpeedHeroCard(
                 downloadFormatted = uiState.liveSpeed.formattedDownload,
-                uploadFormatted = uiState.liveSpeed.formattedUpload
+                uploadFormatted = uiState.liveSpeed.formattedUpload,
+                networkType = uiState.networkType,
+                isMonitoringRunning = uiState.isBackgroundServiceRunning || uiState.isMonitoringActive,
+                onToggleMonitoring = onToggleBackgroundService
             )
         }
 
-        // 3. CURRENT NETWORK CONNECTION
-        item {
-            NetworkConnectionBar(networkType = uiState.networkType)
-        }
-
-        // 4. BACKGROUND MONITORING ON/OFF CONTROL
-        item {
-            BackgroundMonitoringControlCard(
-                isRunning = uiState.isBackgroundServiceRunning,
-                onToggle = onToggleBackgroundService
-            )
-        }
-
-        // 5. TODAY'S USAGE (MOBILE & WI-FI SIDE-BY-SIDE)
-        item {
-            Text(
-                text = "Today's Usage",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 2.dp)
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                TodayDataCard(
-                    title = "Mobile Data",
-                    usageFormatted = uiState.dailyUsage.formattedMobile,
-                    icon = Icons.Default.CellTower,
-                    accentColor = npColors.upload,
-                    onClick = onNavigateToUsage,
-                    modifier = Modifier.weight(1f)
-                )
-
-                TodayDataCard(
-                    title = "Wi-Fi",
-                    usageFormatted = uiState.dailyUsage.formattedWifi,
-                    icon = Icons.Default.SignalWifi4Bar,
-                    accentColor = npColors.download,
-                    onClick = onNavigateToUsage,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // 6. COMPACT SHORTCUTS TO USAGE (LAST 90 DAYS) AND SPEED LOGS
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column {
-                    ShortcutRow(
-                        title = "View Usage History",
-                        subtitle = "Last 90 days heatmap & analytics",
-                        icon = Icons.Default.DataUsage,
-                        iconTint = npColors.download,
-                        onClick = onNavigateToUsage
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(MaterialTheme.colorScheme.outline)
-                    )
-
-                    ShortcutRow(
-                        title = "View Speed Logs",
-                        subtitle = "Detailed speed sample records",
-                        icon = Icons.Default.History,
-                        iconTint = npColors.upload,
-                        onClick = onNavigateToLogs
-                    )
-                }
-            }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-    }
-}
-
-@Composable
-private fun DashboardHeader(
-    isMonitoringActive: Boolean,
-    onToggleMonitoring: () -> Unit = {},
-    onOpenSettings: () -> Unit
-) {
-    val npColors = LocalNetPulseColors.current
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "NetPulse",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Compact Status Chip (Clickable to toggle)
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        if (isMonitoringActive) npColors.download.copy(alpha = 0.15f)
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    .clickable(onClick = onToggleMonitoring)
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val dotColor by animateColorAsState(
-                        targetValue = if (isMonitoringActive) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
-                        label = "dotColor"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(dotColor)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (isMonitoringActive) "Monitoring Active" else "Paused",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isMonitoringActive) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        // Settings Icon Button
-        IconButton(
-            onClick = onOpenSettings,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = "Settings",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp)
+        // 2. COMPACT TODAY'S DATA CONSUMPTION CARD
+        item(key = "today_consumption") {
+            TodayConsumptionCard(
+                hasPermission = uiState.hasUsageAccessPermission,
+                mobileBytes = uiState.dailyUsage.mobileRxBytes + uiState.dailyUsage.mobileTxBytes,
+                wifiBytes = uiState.dailyUsage.wifiRxBytes + uiState.dailyUsage.wifiTxBytes,
+                mobileFormatted = uiState.dailyUsage.formattedMobile,
+                wifiFormatted = uiState.dailyUsage.formattedWifi,
+                totalFormatted = uiState.dailyUsage.formattedTotal,
+                onRequestPermission = onRequestUsageAccess
             )
         }
     }
 }
 
+/**
+ * Coherent Live Speed Hero combining:
+ * - Current Connection status
+ * - Discreet monitoring control
+ * - Prominent download speed with complementary upload speed
+ * - Tabular numerical stability
+ */
 @Composable
-private fun SpeedDualCard(
+private fun LiveSpeedHeroCard(
     downloadFormatted: String,
-    uploadFormatted: String
+    uploadFormatted: String,
+    networkType: NetworkType,
+    isMonitoringRunning: Boolean,
+    onToggleMonitoring: () -> Unit
 ) {
     val npColors = LocalNetPulseColors.current
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Download Speed Card (Strongest visual element in hierarchy)
-        Card(
-            modifier = Modifier
-                .weight(1f)
-                .border(1.dp, npColors.download.copy(alpha = 0.35f), RoundedCornerShape(20.dp)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(20.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(npColors.download.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDownward,
-                            contentDescription = "Download",
-                            tint = npColors.download,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Download",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = downloadFormatted,
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = npColors.download,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp
-                )
-            }
-        }
-
-        // Upload Speed Card (Prominent but slightly secondary)
-        Card(
-            modifier = Modifier
-                .weight(1f)
-                .border(1.dp, npColors.upload.copy(alpha = 0.25f), RoundedCornerShape(20.dp)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(20.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(npColors.upload.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = "Upload",
-                            tint = npColors.upload,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Upload",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = uploadFormatted,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = npColors.upload,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 24.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun NetworkConnectionBar(networkType: NetworkType) {
-    val npColors = LocalNetPulseColors.current
-
-    val (icon, tint, label) = when (networkType) {
-        NetworkType.WIFI -> Triple(Icons.Default.SignalWifi4Bar, npColors.download, "Connected: Wi-Fi")
-        NetworkType.CELLULAR -> Triple(Icons.Default.CellTower, npColors.upload, "Connected: Mobile Data")
-        NetworkType.ETHERNET -> Triple(Icons.Default.SignalWifi4Bar, npColors.download, "Connected: Ethernet")
-        NetworkType.DISCONNECTED -> Triple(Icons.Default.SignalWifiOff, MaterialTheme.colorScheme.onSurfaceVariant, "Offline / Disconnected")
-        NetworkType.UNKNOWN -> Triple(Icons.Default.SignalWifi4Bar, MaterialTheme.colorScheme.onSurfaceVariant, "Network Connecting...")
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (networkType == NetworkType.DISCONNECTED) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-@Composable
-private fun BackgroundMonitoringControlCard(
-    isRunning: Boolean,
-    onToggle: () -> Unit
-) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(
-                1.dp,
-                if (isRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline,
-                RoundedCornerShape(16.dp)
-            ),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(
-                    text = "Background Monitoring",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Keeps tracking even when app is closed",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Switch(
-                checked = isRunning,
-                onCheckedChange = { onToggle() },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun TodayDataCard(
-    title: String,
-    usageFormatted: String,
-    icon: ImageVector,
-    accentColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
         ) {
+            // Top Row: Network Connection Badge on Left, Small Discoverable Monitoring Toggle on Right
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(16.dp)
+                // Connection Status Chip
+                ConnectionStatusBadge(networkType = networkType)
+
+                // Compact Monitoring Switch & Label
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val dotColor by animateColorAsState(
+                        targetValue = if (isMonitoringRunning) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
+                        label = "monitoringDotColor"
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
                     Text(
-                        text = title,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = if (isMonitoringRunning) "Tracking" else "Paused",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isMonitoringRunning) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Switch(
+                        checked = isMonitoringRunning,
+                        onCheckedChange = { onToggleMonitoring() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.size(width = 44.dp, height = 24.dp)
                     )
                 }
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(16.dp)
-                )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
+            // Main Telemetry Area: Prominent Download Speed as Primary Visual Anchor
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                // Left Column: Download (Primary)
+                Column(modifier = Modifier.weight(1.3f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(npColors.download.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDownward,
+                                contentDescription = "Download",
+                                tint = npColors.download,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Text(
+                            text = "Download",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = downloadFormatted,
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = npColors.download,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 32.sp
+                    )
+                }
+
+                // Right Column: Upload (Clearly visible, complementary secondary)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Upload",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(npColors.upload.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowUpward,
+                                contentDescription = "Upload",
+                                tint = npColors.upload,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = uploadFormatted,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = npColors.upload,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 24.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Subdued metadata footer
             Text(
-                text = usageFormatted,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
+                text = if (isMonitoringRunning) "Real-time telemetry • ~1s sampling" else "Monitoring paused by user",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
         }
     }
 }
 
+/**
+ * Compact Connection Status Badge showing connection icon and transport name
+ */
 @Composable
-private fun ShortcutRow(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    iconTint: Color,
-    onClick: () -> Unit
-) {
+private fun ConnectionStatusBadge(networkType: NetworkType) {
+    val npColors = LocalNetPulseColors.current
+
+    val (icon, tint, label) = when (networkType) {
+        NetworkType.WIFI -> Triple(Icons.Default.SignalWifi4Bar, npColors.download, "Wi-Fi")
+        NetworkType.CELLULAR -> Triple(Icons.Default.CellTower, npColors.upload, "Mobile Data")
+        NetworkType.ETHERNET -> Triple(Icons.Default.SignalWifi4Bar, npColors.download, "Ethernet")
+        NetworkType.DISCONNECTED -> Triple(Icons.Default.SignalWifiOff, MaterialTheme.colorScheme.onSurfaceVariant, "Offline")
+        NetworkType.UNKNOWN -> Triple(Icons.Default.SignalWifi4Bar, MaterialTheme.colorScheme.onSurfaceVariant, "Connecting...")
+    }
+
     Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+/**
+ * Single coherent Today's Data Consumption section:
+ * - Combined usage today as headline
+ * - Proportional usage bar (Mobile vs Wi-Fi)
+ * - Clean mobile & Wi-Fi row
+ */
+@Composable
+private fun TodayConsumptionCard(
+    hasPermission: Boolean,
+    mobileBytes: Long,
+    wifiBytes: Long,
+    mobileFormatted: String,
+    wifiFormatted: String,
+    totalFormatted: String,
+    onRequestPermission: () -> Unit
+) {
+    val npColors = LocalNetPulseColors.current
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(iconTint.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            // Header: "Today's Usage" + Combined Total Value
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(18.dp)
-                )
+                Column {
+                    Text(
+                        text = "Today's Consumption",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Since 12:00 AM local time",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (hasPermission) {
+                    Text(
+                        text = totalFormatted,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
+            if (!hasPermission) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = npColors.warning,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Usage access required to display daily data",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onRequestPermission,
+                        modifier = Modifier.height(32.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(text = "Grant", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Proportional Mobile vs Wi-Fi bar
+                val totalBytes = (mobileBytes + wifiBytes).coerceAtLeast(1L)
+                val mobileFraction = (mobileBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                val wifiFraction = (wifiBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    if (mobileBytes > 0L || wifiBytes > 0L) {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            if (mobileFraction > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(mobileFraction.coerceAtLeast(0.01f))
+                                        .fillMaxSize()
+                                        .background(npColors.upload)
+                                )
+                            }
+                            if (wifiFraction > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(wifiFraction.coerceAtLeast(0.01f))
+                                        .fillMaxSize()
+                                        .background(npColors.download)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Sub-metrics Row: Mobile vs Wi-Fi
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Mobile
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(npColors.upload)
+                        )
+                        Column {
+                            Text(
+                                text = "Mobile Data",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = mobileFormatted,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Wi-Fi
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(npColors.download)
+                        )
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Wi-Fi Data",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = wifiFormatted,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             }
         }
-
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(20.dp)
-        )
     }
 }

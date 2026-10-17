@@ -1,6 +1,5 @@
 package com.ayush.netpulse.ui.settings
 
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,10 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Refresh
@@ -97,12 +100,18 @@ fun SettingsScreen(
     var showNotificationStyleDialog by remember { mutableStateOf(false) }
     var showRefreshIntervalDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showPermissionsDialog by remember { mutableStateOf(false) }
+    var showDiagnosticsDialog by remember { mutableStateOf(false) }
+
+    val allPermissionsReady = uiState.hasUsageAccessPermission &&
+            uiState.hasNotificationPermission &&
+            uiState.isBatteryOptimizationIgnored
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Top App Bar
@@ -115,33 +124,34 @@ fun SettingsScreen(
                 IconButton(
                     onClick = onBack,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface)
-                        .border(1.dp, netPulseColors.cardBorder, CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(14.dp))
                 Text(
                     text = "Settings",
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        // 1. APPEARANCE & THEME SECTION
+        // 1. APPEARANCE
         item {
-            SectionTitle(title = "Appearance & Theme")
-            SettingsCard {
-                SettingsClickableRow(
-                    title = "App theme",
+            SectionHeader(title = "Appearance")
+            PreferenceGroup {
+                PreferenceClickableRow(
+                    title = "Theme",
                     value = when (uiState.appTheme) {
                         "Light" -> "Light (Blueberry + Cream Soda)"
                         "System" -> "Follow system"
@@ -152,131 +162,196 @@ fun SettingsScreen(
             }
         }
 
-        // 2. MONITORING SECTION
+        // 2. MONITORING
         item {
-            SectionTitle(title = "Monitoring")
-            SettingsCard {
+            SectionHeader(title = "Monitoring")
+            PreferenceGroup {
                 // Background Monitoring Toggle
-                SettingsSwitchRow(
-                    title = "Background Monitoring",
-                    subtitle = "Keep tracking even when app is closed",
+                PreferenceSwitchRow(
+                    title = "Background monitoring",
+                    subtitle = "Track speeds even when app is closed",
                     checked = uiState.isBackgroundServiceRunning,
                     onCheckedChange = { onToggleBackgroundMonitoring() }
                 )
 
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
-
-                // Dynamic Status Bar Speed Icon Toggle
-                SettingsSwitchRow(
-                    title = "Show speed in status bar",
-                    subtitle = "Display download speed as icon text (Experimental)",
-                    checked = uiState.showSpeedInStatusBar,
-                    onCheckedChange = { onToggleSpeedInStatusBar() }
-                )
-
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
 
                 // Speed Display Units
-                SettingsClickableRow(
+                PreferenceClickableRow(
                     title = "Speed display units",
                     value = uiState.speedUnitPreference,
                     onClick = { showUnitDialog = true }
                 )
 
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+
+                // Status Bar Numeric Speed
+                PreferenceSwitchRow(
+                    title = "Status-bar numeric speed",
+                    subtitle = "Show live download rate in status bar",
+                    checked = uiState.showSpeedInStatusBar,
+                    onCheckedChange = { onToggleSpeedInStatusBar() }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
 
                 // Notification Style
-                SettingsClickableRow(
+                PreferenceClickableRow(
                     title = "Notification style",
                     value = when (uiState.notificationStyle) {
-                        "Detailed" -> "Detailed (Speed + Usage)"
-                        else -> "Minimal (recommended)"
+                        "Detailed" -> "Detailed"
+                        else -> "Minimal (compact)"
                     },
                     onClick = { showNotificationStyleDialog = true }
                 )
 
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
 
-                // Notification Refresh Rate
-                SettingsClickableRow(
+                // Notification Refresh Preference
+                PreferenceClickableRow(
                     title = "Notification refresh rate",
                     value = when (uiState.notificationRefreshIntervalMs) {
-                        1000L -> "1 second (Interactive)"
-                        else -> "2.5 seconds (Battery saver fallback)"
+                        1000L -> "1 second (interactive)"
+                        else -> "2.5 seconds (battery saver)"
                     },
                     onClick = { showRefreshIntervalDialog = true }
                 )
             }
         }
 
-        // 3. PERMISSIONS SECTION
+        // 3. PERMISSIONS & BATTERY
         item {
-            SectionTitle(title = "Permissions")
-            SettingsCard {
-                PermissionItem(
-                    name = "Usage Access",
-                    description = "Required to read daily mobile & Wi-Fi usage history",
-                    isGranted = uiState.hasUsageAccessPermission,
-                    statusText = if (uiState.hasUsageAccessPermission) "Granted" else "Needs Permission",
-                    onRequest = onRequestUsageAccess
-                )
+            SectionHeader(title = "Permissions & Battery")
+            PreferenceGroup {
+                if (allPermissionsReady) {
+                    // All permissions ready summary row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showPermissionsDialog = true }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Permissions — All ready",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    // Attention needed warning row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showPermissionsDialog = true }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = netPulseColors.warning,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Permissions — Attention needed",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Tap to review missing permissions",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = netPulseColors.warning
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
 
-                PermissionItem(
-                    name = "Notification & Status Bar",
-                    description = if (uiState.hasNotificationPermission) {
-                        "Promoted priority active • Tap to open system channel settings"
-                    } else {
-                        "Required for live speed status bar meter"
-                    },
-                    isGranted = uiState.hasNotificationPermission,
-                    statusText = if (uiState.hasNotificationPermission) "Granted" else "Needs Permission",
-                    onRequest = onRequestNotificationPermission
-                )
+                    // Inline items needing attention for immediate resolution
+                    if (!uiState.hasUsageAccessPermission) {
+                        PermissionActionRow(
+                            name = "Usage Access",
+                            status = "Needs Permission",
+                            isGranted = false,
+                            onRequest = onRequestUsageAccess
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+                    }
 
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+                    if (!uiState.hasNotificationPermission) {
+                        PermissionActionRow(
+                            name = "Notifications",
+                            status = "Needs Permission",
+                            isGranted = false,
+                            onRequest = onRequestNotificationPermission
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+                    }
 
-                PermissionItem(
-                    name = "Battery Optimization",
-                    description = "Recommended: Set to Unrestricted to prevent overnight termination",
-                    isGranted = uiState.isBatteryOptimizationIgnored,
-                    statusText = if (uiState.isBatteryOptimizationIgnored) "Unrestricted" else "Optimized",
-                    onRequest = onRequestBatteryOptimization
-                )
+                    if (!uiState.isBatteryOptimizationIgnored) {
+                        PermissionActionRow(
+                            name = "Battery Restrictions",
+                            status = "Optimized",
+                            isGranted = false,
+                            onRequest = onRequestBatteryOptimization
+                        )
+                    }
+                }
             }
         }
 
-        // 4. HISTORY & STORAGE SECTION
+        // 4. HISTORY & STORAGE
         item {
-            SectionTitle(title = "History & Storage")
-            SettingsCard {
-                SettingsClickableRow(
-                    title = "View Speed Logs",
-                    value = "${uiState.recentRecords.size} samples",
-                    valueColor = MaterialTheme.colorScheme.primary,
-                    onClick = { showSpeedLogs = true }
-                )
-
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
-
-                SettingsClickableRow(
+            SectionHeader(title = "History & Storage")
+            PreferenceGroup {
+                PreferenceClickableRow(
                     title = "Speed log retention",
                     value = "${uiState.diagnosticsInfo.logRetentionDays} days",
                     onClick = { showRetentionDialog = true }
                 )
 
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
 
-                SettingsClickableRow(
+                PreferenceClickableRow(
                     title = "Clear speed logs",
                     value = "Keep daily usage",
                     valueColor = netPulseColors.error,
                     onClick = { showClearConfirmDialog = true }
                 )
 
-                HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
 
+                // History reconciliation
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -287,17 +362,18 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Reconcile usage history",
+                            text = "History reconciliation",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "Scan Android NetworkStats for past 90 days",
+                            text = "Re-sync past 90 days from system statistics",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
                     if (uiState.isReconcilingUsage) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
@@ -316,34 +392,110 @@ fun SettingsScreen(
             }
         }
 
-        // 5. DIAGNOSTICS SECTION
+        // 5. ADVANCED
         item {
-            SectionTitle(title = "Diagnostics")
-            DiagnosticsContentCard(
-                diagnostics = uiState.diagnosticsInfo,
-                recordsCount = uiState.recentRecords.size,
-                onViewLogs = { showSpeedLogs = true }
-            )
+            SectionHeader(title = "Advanced")
+            PreferenceGroup {
+                // Diagnostics entry
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDiagnosticsDialog = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Diagnostics & System Details",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Service status, OS process exits, and timestamps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+
+                // Speed Logs entry
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showSpeedLogs = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Speed Logs",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Raw speed telemetry samples",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${uiState.recentRecords.size} samples",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
         }
 
-        // 6. ABOUT SECTION
+        // 6. ABOUT
         item {
-            SectionTitle(title = "About")
-            SettingsCard {
+            SectionHeader(title = "About")
+            PreferenceGroup {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Speed,
                                 contentDescription = "NetPulse",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
@@ -355,7 +507,7 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Version 1.0.0 • Midnight Blueberry Edition",
+                                text = "Version 1.0.0",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -368,7 +520,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                             .padding(12.dp)
                     ) {
                         Column {
@@ -389,7 +541,7 @@ fun SettingsScreen(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "All network speed metrics and daily data statistics are processed strictly on your device. NetPulse requires no account, uses no internet servers, and performs zero tracking.",
+                                text = "All network metrics and data statistics are processed locally on your device. Zero tracking, zero telemetry servers, and complete offline privacy.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 16.sp
@@ -398,11 +550,30 @@ fun SettingsScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 
-    // Dialogs
+    // Diagnostics Dialog
+    if (showDiagnosticsDialog) {
+        DiagnosticsDetailsDialog(
+            diagnostics = uiState.diagnosticsInfo,
+            onDismiss = { showDiagnosticsDialog = false }
+        )
+    }
+
+    // Permissions Details Dialog
+    if (showPermissionsDialog) {
+        PermissionsDetailsDialog(
+            uiState = uiState,
+            onRequestUsageAccess = onRequestUsageAccess,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onRequestBatteryOptimization = onRequestBatteryOptimization,
+            onDismiss = { showPermissionsDialog = false }
+        )
+    }
+
+    // App Theme Dialog
     if (showThemeDialog) {
         AlertDialog(
             onDismissRequest = { showThemeDialog = false },
@@ -460,6 +631,7 @@ fun SettingsScreen(
         )
     }
 
+    // Refresh Interval Dialog
     if (showRefreshIntervalDialog) {
         AlertDialog(
             onDismissRequest = { showRefreshIntervalDialog = false },
@@ -473,8 +645,8 @@ fun SettingsScreen(
             text = {
                 Column {
                     listOf(
-                        1000L to "1 second (Interactive — responsive live speed)",
-                        2500L to "2.5 seconds (Battery saver fallback)"
+                        1000L to "1 second (Interactive)",
+                        2500L to "2.5 seconds (Battery saver)"
                     ).forEach { (intervalMs, label) ->
                         val isSelected = uiState.notificationRefreshIntervalMs == intervalMs
                         Row(
@@ -516,6 +688,7 @@ fun SettingsScreen(
         )
     }
 
+    // Clear Logs Dialog
     if (showClearConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showClearConfirmDialog = false },
@@ -551,6 +724,7 @@ fun SettingsScreen(
         )
     }
 
+    // Log Retention Dialog
     if (showRetentionDialog) {
         AlertDialog(
             onDismissRequest = { showRetentionDialog = false },
@@ -564,6 +738,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     listOf(7, 30, 90).forEach { days ->
+                        val isSelected = uiState.diagnosticsInfo.logRetentionDays == days
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -577,9 +752,10 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 text = "$days days",
-                                color = if (uiState.diagnosticsInfo.logRetentionDays == days) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                             )
-                            if (uiState.diagnosticsInfo.logRetentionDays == days) {
+                            if (isSelected) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Selected",
@@ -601,6 +777,7 @@ fun SettingsScreen(
         )
     }
 
+    // Speed Unit Dialog
     if (showUnitDialog) {
         AlertDialog(
             onDismissRequest = { showUnitDialog = false },
@@ -614,6 +791,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     listOf("Auto", "KB/s", "MB/s").forEach { unit ->
+                        val isSelected = uiState.speedUnitPreference == unit
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -631,9 +809,10 @@ fun SettingsScreen(
                                     "KB/s" -> "Kilobytes per second (KB/s)"
                                     else -> "Megabytes per second (MB/s)"
                                 },
-                                color = if (uiState.speedUnitPreference == unit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                             )
-                            if (uiState.speedUnitPreference == unit) {
+                            if (isSelected) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Selected",
@@ -655,6 +834,7 @@ fun SettingsScreen(
         )
     }
 
+    // Notification Style Dialog
     if (showNotificationStyleDialog) {
         AlertDialog(
             onDismissRequest = { showNotificationStyleDialog = false },
@@ -668,8 +848,8 @@ fun SettingsScreen(
             text = {
                 Column {
                     listOf(
-                        "Minimal" to "Minimal (Slim 2-line speed & daily usage)",
-                        "Detailed" to "Detailed (Expanded card with breakdown & Stop button)"
+                        "Minimal" to "Minimal (Compact 2-line speed & usage)",
+                        "Detailed" to "Detailed (Expanded card with breakdown)"
                     ).forEach { (styleKey, label) ->
                         val isSelected = uiState.notificationStyle == styleKey
                         Row(
@@ -686,7 +866,8 @@ fun SettingsScreen(
                             Text(
                                 text = label,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                             )
                             if (isSelected) {
                                 Icon(
@@ -712,25 +893,30 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SectionTitle(title: String) {
+private fun SectionHeader(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
     )
 }
 
 @Composable
-private fun SettingsCard(content: @Composable () -> Unit) {
-    val netPulseColors = LocalNetPulseColors.current
+private fun PreferenceGroup(
+    content: @Composable ColumnScope.() -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, netPulseColors.cardBorder, RoundedCornerShape(16.dp)),
+            .border(
+                0.5.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                RoundedCornerShape(14.dp)
+            ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(14.dp)
     ) {
         Column {
             content()
@@ -739,7 +925,7 @@ private fun SettingsCard(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsSwitchRow(
+private fun PreferenceSwitchRow(
     title: String,
     subtitle: String,
     checked: Boolean,
@@ -748,7 +934,7 @@ private fun SettingsSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -779,7 +965,7 @@ private fun SettingsSwitchRow(
 }
 
 @Composable
-private fun SettingsClickableRow(
+private fun PreferenceClickableRow(
     title: String,
     value: String,
     valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -809,7 +995,7 @@ private fun SettingsClickableRow(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -817,75 +1003,117 @@ private fun SettingsClickableRow(
 }
 
 @Composable
-private fun PermissionItem(
+private fun PermissionActionRow(
     name: String,
-    description: String,
+    status: String,
     isGranted: Boolean,
-    statusText: String,
     onRequest: () -> Unit
 ) {
     val netPulseColors = LocalNetPulseColors.current
     val statusColor = if (isGranted) MaterialTheme.colorScheme.primary else netPulseColors.warning
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
+                contentDescription = null,
+                tint = statusColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
                 Text(
                     text = name,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium
                 )
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor
+                )
             }
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.labelMedium,
-                color = statusColor,
-                fontWeight = FontWeight.SemiBold
-            )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
         if (!isGranted) {
-            Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
                 onClick = onRequest,
-                modifier = Modifier.height(34.dp),
+                modifier = Modifier.height(32.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(text = "Open Settings", style = MaterialTheme.typography.labelSmall)
+                Text(text = "Grant", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
 }
 
 @Composable
-private fun DiagnosticsContentCard(
+private fun PermissionsDetailsDialog(
+    uiState: DashboardUiState,
+    onRequestUsageAccess: () -> Unit,
+    onRequestNotificationPermission: () -> Unit,
+    onRequestBatteryOptimization: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Permissions & Battery",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                PermissionActionRow(
+                    name = "Usage Access",
+                    status = if (uiState.hasUsageAccessPermission) "Granted" else "Required for historical data",
+                    isGranted = uiState.hasUsageAccessPermission,
+                    onRequest = onRequestUsageAccess
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+
+                PermissionActionRow(
+                    name = "Notifications",
+                    status = if (uiState.hasNotificationPermission) "Granted" else "Required for live meter",
+                    isGranted = uiState.hasNotificationPermission,
+                    onRequest = onRequestNotificationPermission
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+
+                PermissionActionRow(
+                    name = "Battery Restrictions",
+                    status = if (uiState.isBatteryOptimizationIgnored) "Unrestricted" else "Recommended Unrestricted",
+                    isGranted = uiState.isBatteryOptimizationIgnored,
+                    onRequest = onRequestBatteryOptimization
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Close", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+}
+
+@Composable
+private fun DiagnosticsDetailsDialog(
     diagnostics: DiagnosticsInfo,
-    recordsCount: Int,
-    onViewLogs: () -> Unit
+    onDismiss: () -> Unit
 ) {
     val netPulseColors = LocalNetPulseColors.current
     val serviceStatusColor = when (diagnostics.resolvedServiceStatus) {
@@ -895,98 +1123,78 @@ private fun DiagnosticsContentCard(
         else -> netPulseColors.warning
     }
 
-    SettingsCard {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            DiagRow("Service Status", diagnostics.resolvedServiceStatus, serviceStatusColor)
-            DiagRow("Last Service Start", diagnostics.formatTimestamp(diagnostics.lastServiceStartTimestamp))
-            DiagRow("Last Speed Sample", diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp))
-            DiagRow("Last Displayed Speed", diagnostics.formatTimestamp(diagnostics.lastDisplayedSpeedTimestamp))
-            DiagRow("Last Notification Attempt", diagnostics.formatTimestamp(diagnostics.lastAttemptedNotificationTimestamp))
-            DiagRow("Last Notification Update", diagnostics.formatTimestamp(diagnostics.lastNotificationUpdateTimestamp))
-            if (diagnostics.serviceRestartCount > 0) {
-                DiagRow("OS Restarts Count", "${diagnostics.serviceRestartCount} times", MaterialTheme.colorScheme.primary)
-            }
-            DiagRow("Historical Reconciliation", diagnostics.formatTimestamp(diagnostics.lastReconciliationTimestamp))
-            DiagRow("Confirmed OS Exit Reason", diagnostics.confirmedProcessExitReason, MaterialTheme.colorScheme.onSurfaceVariant)
-            DiagRow(
-                "Android & Device",
-                "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
-                MaterialTheme.colorScheme.onSurfaceVariant
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Diagnostics & Details",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
             )
-
-            HorizontalDivider(color = netPulseColors.cardBorder, thickness = 0.5.dp)
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onViewLogs)
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Column {
-                    Text(
-                        text = "Speed Logs",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "View all raw speed telemetry records",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                DiagRow("Service Status", diagnostics.resolvedServiceStatus, serviceStatusColor)
+                DiagRow("Last Service Start", diagnostics.formatTimestamp(diagnostics.lastServiceStartTimestamp))
+                DiagRow("Last Speed Sample", diagnostics.formatTimestamp(diagnostics.lastSpeedSampleTimestamp))
+                DiagRow("Last Displayed Speed", diagnostics.formatTimestamp(diagnostics.lastDisplayedSpeedTimestamp))
+                DiagRow("Last Notification Attempt", diagnostics.formatTimestamp(diagnostics.lastAttemptedNotificationTimestamp))
+                DiagRow("Last Notification Update", diagnostics.formatTimestamp(diagnostics.lastNotificationUpdateTimestamp))
+                if (diagnostics.serviceRestartCount > 0) {
+                    DiagRow("OS Restarts Count", "${diagnostics.serviceRestartCount} times", MaterialTheme.colorScheme.primary)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "$recordsCount records",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
+                DiagRow("Historical Reconciliation", diagnostics.formatTimestamp(diagnostics.lastReconciliationTimestamp))
+                DiagRow("Confirmed OS Exit Reason", diagnostics.confirmedProcessExitReason, MaterialTheme.colorScheme.onSurfaceVariant)
+                DiagRow(
+                    "Device & OS",
+                    "${diagnostics.deviceManufacturer} ${diagnostics.deviceModel} (Android ${diagnostics.androidVersion}, API ${diagnostics.apiLevel})",
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-            if (!diagnostics.lastNotificationException.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(netPulseColors.error.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Notification Issue: ${diagnostics.lastNotificationException}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = netPulseColors.error,
-                        fontSize = 11.sp
-                    )
+                if (!diagnostics.lastNotificationException.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(netPulseColors.error.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Notification Issue: ${diagnostics.lastNotificationException}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = netPulseColors.error,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
-            }
 
-            if (!diagnostics.lastKnownError.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(netPulseColors.error.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Last Known Error: ${diagnostics.lastKnownError}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = netPulseColors.error,
-                        fontSize = 11.sp
-                    )
+                if (!diagnostics.lastKnownError.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(netPulseColors.error.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Last Known Error: ${diagnostics.lastKnownError}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = netPulseColors.error,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
-        }
-    }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Close", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface
+    )
 }
 
 @Composable

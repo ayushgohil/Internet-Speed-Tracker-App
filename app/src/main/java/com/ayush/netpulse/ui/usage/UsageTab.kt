@@ -39,6 +39,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,10 +58,10 @@ import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.theme.LocalNetPulseColors
+import com.ayush.netpulse.ui.theme.NetPulseExtendedColors
 import com.ayush.netpulse.util.NetworkUtils
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 enum class UsageFilterType(val label: String) {
@@ -117,12 +118,21 @@ fun UsageTab(
         generate90DaysGrid(recentDailyRecords)
     }
 
-    // Precompute reversed list once to avoid allocating 90 items per recomposition
+    // Precompute reversed list once (newest dates first)
     val reversedDaysList = remember(daysList) {
         daysList.reversed()
     }
 
-    // Precompute weeks layout once
+    // Group reversed list by Year-Month for clean month section headers
+    val groupedByMonth = remember(reversedDaysList) {
+        reversedDaysList.groupBy { it.dateStr.substring(0, 7) }
+    }
+
+    // Month parsing & formatting
+    val monthKeyParser = remember { SimpleDateFormat("yyyy-MM", Locale.getDefault()) }
+    val monthHeaderFormatter = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
+
+    // Precompute weeks layout once for heatmap
     val weeks = remember(daysList) {
         chunkIntoWeeks(daysList)
     }
@@ -141,7 +151,7 @@ fun UsageTab(
         DynamicHeatmapClassifier.computeThresholds(values)
     }
 
-    // Precompute intensity level for each cell to eliminate per-item calculations
+    // Precompute intensity level for each cell
     val cellLevelMap = remember(daysList, selectedFilter, thresholds) {
         daysList.associate { cell ->
             val bytes = when (selectedFilter) {
@@ -170,12 +180,12 @@ fun UsageTab(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 1. Header
+        // 1. Compact Header: Usage | Refresh
         item(key = "header") {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -183,13 +193,13 @@ fun UsageTab(
             ) {
                 Column {
                     Text(
-                        text = "Usage History",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Usage",
+                        style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Last 90 days • Android NetworkStatsManager",
+                        text = "Past 90 days",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -205,23 +215,23 @@ fun UsageTab(
                     IconButton(
                         onClick = onRefreshUsage,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
         }
 
-        // 2. Filter Chips: Mobile | Wi-Fi | Total
+        // 2. Compact Filter Chips: Total | Mobile | Wi-Fi
         item(key = "filter_chips") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -237,7 +247,7 @@ fun UsageTab(
                                 text = filterType.label,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
@@ -247,54 +257,83 @@ fun UsageTab(
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = isSelected,
-                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                             selectedBorderColor = MaterialTheme.colorScheme.primary
                         ),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = RoundedCornerShape(16.dp)
                     )
                 }
             }
         }
 
-        // 3. Dynamic Activity Heatmap Card
+        // 3. Compact Dynamic Activity Heatmap Card
         item(key = "heatmap_card") {
             CalendarHeatmapCard(
                 weeks = weeks,
                 cellLevelMap = cellLevelMap,
-                thresholds = thresholds,
                 onSelectCell = { cell -> selectedDayDetail = cell }
             )
         }
 
-        // 4. Detailed Daily Usage Table (Last 90 days) Title
-        item(key = "table_title") {
-            Text(
-                text = "Daily Usage (Last 90 days)",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 2.dp, top = 2.dp)
-            )
-        }
-
-        // Table Header
+        // 4. Daily Usage Table Header (Column Titles)
         item(key = "table_header") {
+            Spacer(modifier = Modifier.height(4.dp))
             DailyTableHeaderRow()
         }
 
-        // Stable-Keyed Table Rows: Prevents full list recomposition and ensures smooth 60/120fps scrolling
-        items(
-            items = reversedDaysList,
-            key = { it.dateStr }
-        ) { cell ->
-            DailyTableRow(
-                cell = cell,
-                onClick = { selectedDayDetail = cell }
-            )
+        // 5. Month-Grouped Daily Records
+        groupedByMonth.forEach { (monthKey, daysInMonth) ->
+            // Month Separator Header
+            item(key = "month_header_$monthKey", contentType = "month_header") {
+                val monthTitle = remember(monthKey) {
+                    try {
+                        val date = monthKeyParser.parse(monthKey)
+                        if (date != null) monthHeaderFormatter.format(date) else monthKey
+                    } catch (e: Exception) {
+                        monthKey
+                    }
+                }
+                val monthTotalBytes = remember(daysInMonth) {
+                    daysInMonth.sumOf { it.entity?.totalAllBytes ?: 0L }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = monthTitle,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = NetworkUtils.formatBytes(monthTotalBytes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Days within this month
+            items(
+                items = daysInMonth,
+                key = { it.dateStr },
+                contentType = { "daily_row" }
+            ) { cell ->
+                DailyTableRow(
+                    cell = cell,
+                    onClick = { selectedDayDetail = cell }
+                )
+            }
         }
 
         item(key = "footer_spacer") {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 
@@ -311,7 +350,6 @@ fun UsageTab(
 private fun CalendarHeatmapCard(
     weeks: List<List<DayHeatmapCell?>>,
     cellLevelMap: Map<String, HeatmapIntensityLevel>,
-    thresholds: HeatmapThresholds?,
     onSelectCell: (DayHeatmapCell) -> Unit
 ) {
     val npColors = LocalNetPulseColors.current
@@ -319,11 +357,11 @@ private fun CalendarHeatmapCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(14.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -336,13 +374,13 @@ private fun CalendarHeatmapCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "Quantile-Aware • 90 Days",
+                    text = "Tap day for details",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Horizontally scrollable weeks grid
             val scrollState = rememberScrollState()
@@ -354,13 +392,13 @@ private fun CalendarHeatmapCard(
                 // Weekday labels column (Mon, Wed, Fri)
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(end = 6.dp, top = 20.dp)
+                    modifier = Modifier.padding(end = 6.dp, top = 18.dp)
                 ) {
                     listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { idx, day ->
                         Text(
                             text = if (idx % 2 == 0) day else "",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             fontSize = 9.sp,
                             modifier = Modifier.size(13.dp),
                             textAlign = TextAlign.Center
@@ -406,7 +444,7 @@ private fun CalendarHeatmapCard(
                                             .background(color)
                                             .border(
                                                 width = if (cell.isToday) 1.5.dp else 0.5.dp,
-                                                color = if (cell.isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                                color = if (cell.isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
                                                 shape = RoundedCornerShape(2.dp)
                                             )
                                             .clickable { onSelectCell(cell) }
@@ -420,76 +458,64 @@ private fun CalendarHeatmapCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Coherent Dynamic Heatmap Legend with thresholds
-            HeatmapLegend(thresholds = thresholds, npColors = npColors)
+            // Coherent Dynamic Heatmap Legend
+            HeatmapLegend(npColors = npColors)
         }
     }
 }
 
 @Composable
 private fun HeatmapLegend(
-    thresholds: HeatmapThresholds?,
-    npColors: com.ayush.netpulse.ui.theme.NetPulseExtendedColors
+    npColors: NetPulseExtendedColors
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                LegendCell(color = npColors.heatmapMissing)
-                Text(
-                    text = "Missing",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                LegendCell(color = npColors.heatmapZero)
-                Text(
-                    text = "0 B",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp
-                )
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (thresholds != null) "≤${NetworkUtils.formatBytes(thresholds.minPositive)}" else "Less",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp
-                )
-                LegendCell(color = npColors.heatmapLevel1)
-                LegendCell(color = npColors.heatmapLevel2)
-                LegendCell(color = npColors.heatmapLevel3)
-                LegendCell(color = npColors.heatmapLevel4)
-                LegendCell(color = npColors.heatmapLevel5)
-                Text(
-                    text = if (thresholds != null) "≥${NetworkUtils.formatBytes(thresholds.maxPositive)}" else "More",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp
-                )
-            }
+            LegendCell(color = npColors.heatmapMissing)
+            Text(
+                text = "Missing",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            LegendCell(color = npColors.heatmapZero)
+            Text(
+                text = "0 B",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp
+            )
         }
 
-        if (thresholds != null && thresholds.minPositive < thresholds.maxPositive) {
-            Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = "Quintiles: L1 ≤ ${NetworkUtils.formatBytes(thresholds.t1)} • L2 ≤ ${NetworkUtils.formatBytes(thresholds.t2)} • L3 ≤ ${NetworkUtils.formatBytes(thresholds.t3)} • L4 ≤ ${NetworkUtils.formatBytes(thresholds.t4)} • L5 > ${NetworkUtils.formatBytes(thresholds.t4)}",
+                text = "Less",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                fontSize = 9.sp,
-                textAlign = TextAlign.End,
-                modifier = Modifier.fillMaxWidth()
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp
+            )
+            LegendCell(color = npColors.heatmapLevel1)
+            LegendCell(color = npColors.heatmapLevel2)
+            LegendCell(color = npColors.heatmapLevel3)
+            LegendCell(color = npColors.heatmapLevel4)
+            LegendCell(color = npColors.heatmapLevel5)
+            Text(
+                text = "More",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp
             )
         }
     }
@@ -502,7 +528,7 @@ private fun LegendCell(color: Color) {
             .size(10.dp)
             .clip(RoundedCornerShape(2.dp))
             .background(color)
-            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
     )
 }
 
@@ -511,7 +537,7 @@ private fun DailyTableHeaderRow() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -519,7 +545,7 @@ private fun DailyTableHeaderRow() {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1.3f)
+            modifier = Modifier.weight(1.2f)
         )
         Text(
             text = "MOBILE",
@@ -557,61 +583,66 @@ private fun DailyTableRow(
     val entity = cell.entity
     val isToday = cell.isToday
 
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-            )
-            .border(
-                1.dp,
-                if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                RoundedCornerShape(8.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .clickable(onClick = onClick),
+        color = if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+        else Color.Transparent
     ) {
-        // Date Column
-        Column(modifier = Modifier.weight(1.3f)) {
-            Text(
-                text = if (isToday) "Today" else cell.displayDate,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Date Column
+                Column(modifier = Modifier.weight(1.2f)) {
+                    Text(
+                        text = if (isToday) "Today" else cell.displayDate,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+
+                // Mobile Data Column
+                Text(
+                    text = if (entity != null) entity.formattedMobile else "—",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (entity != null && entity.totalMobileBytes > 0) npColors.upload else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Wi-Fi Column
+                Text(
+                    text = if (entity != null) entity.formattedWifi else "—",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (entity != null && entity.totalWifiBytes > 0) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Total Column
+                Text(
+                    text = if (entity != null) entity.formattedTotal else "—",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (entity != null && entity.totalAllBytes > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1.1f)
+                )
+            }
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(horizontal = 6.dp)
             )
         }
-
-        // Mobile Data Column
-        Text(
-            text = if (entity != null) entity.formattedMobile else "—",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (entity != null && entity.totalMobileBytes > 0) npColors.upload else MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f)
-        )
-
-        // Wi-Fi Column
-        Text(
-            text = if (entity != null) entity.formattedWifi else "—",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (entity != null && entity.totalWifiBytes > 0) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f)
-        )
-
-        // Total Column
-        Text(
-            text = if (entity != null) entity.formattedTotal else "—",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (entity != null && entity.totalAllBytes > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1.1f)
-        )
     }
 }
 
@@ -644,7 +675,7 @@ private fun UsageDetailDialog(
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (entity == null) {
                     Text(
-                        text = "Historical statistics were not recorded or are unavailable from the Android operating system for this date.",
+                        text = "Historical statistics were not recorded or are unavailable for this date.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -659,7 +690,7 @@ private fun UsageDetailDialog(
                         tx = NetworkUtils.formatBytes(entity.mobileTxBytes)
                     )
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                     // Wi-Fi Breakdown
                     UsageDetailSection(
@@ -671,7 +702,7 @@ private fun UsageDetailDialog(
                         tx = NetworkUtils.formatBytes(entity.wifiTxBytes)
                     )
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                     // Combined
                     Row(
@@ -752,9 +783,9 @@ private fun UsagePermissionRequiredCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(16.dp)),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(16.dp)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -787,7 +818,7 @@ private fun UsagePermissionRequiredCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Android requires the 'Usage Access' permission to query NetworkStatsManager for daily Wi-Fi and mobile data statistics.",
+                    text = "Android requires Usage Access to monitor daily Wi-Fi and mobile data statistics.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -862,7 +893,6 @@ private fun chunkIntoWeeks(days: List<DayHeatmapCell>): List<List<DayHeatmapCell
     var currentWeek = MutableList<DayHeatmapCell?>(7) { null }
 
     days.forEach { day ->
-        // Convert Calendar.DAY_OF_WEEK (Sun=1..Sat=7) to Monday-based index (Mon=0..Sun=6)
         val mondayBasedDayIndex = when (day.dayOfWeek) {
             Calendar.MONDAY -> 0
             Calendar.TUESDAY -> 1
@@ -876,7 +906,6 @@ private fun chunkIntoWeeks(days: List<DayHeatmapCell>): List<List<DayHeatmapCell
 
         currentWeek[mondayBasedDayIndex] = day
 
-        // When Sunday (6) is filled or we reached the end
         if (mondayBasedDayIndex == 6) {
             weeks.add(currentWeek)
             currentWeek = MutableList(7) { null }

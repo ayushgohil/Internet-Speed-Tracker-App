@@ -45,9 +45,9 @@ fun StickyUsageSummaryBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
-            // Row 1: "Last 90 Days" + Total Combined (with Cream Soda accent if appropriate)
+            // Row 1: "90-day total" + Total Combined
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -55,9 +55,9 @@ fun StickyUsageSummaryBar(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Last 90 Days",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "90-day total",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold
                     )
                     if (isPartial) {
@@ -81,45 +81,39 @@ fun StickyUsageSummaryBar(
 
             Spacer(modifier = Modifier.height(3.dp))
 
-            // Row 2: Mobile: 145 GB | Wi-Fi: 220 GB
+            // Row 2: Mobile 258.7 GB · Wi-Fi 175.7 GB
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Mobile: ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = NetworkUtils.formatBytes(totalMobileBytes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = npColors.upload,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
                 Text(
-                    text = "•",
+                    text = "Mobile ",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Wi-Fi: ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = NetworkUtils.formatBytes(totalWifiBytes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = npColors.download,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = NetworkUtils.formatBytes(totalMobileBytes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = npColors.upload,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "  ·  ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = "Wi-Fi ",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = NetworkUtils.formatBytes(totalWifiBytes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = npColors.download,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }

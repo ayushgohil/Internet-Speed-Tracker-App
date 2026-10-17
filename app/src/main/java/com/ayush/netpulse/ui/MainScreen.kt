@@ -1,32 +1,55 @@
 package com.ayush.netpulse.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.ui.dashboard.DashboardTab
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.navigation.NavScreen
 import com.ayush.netpulse.ui.settings.SettingsScreen
+import com.ayush.netpulse.ui.theme.LocalNetPulseColors
 import com.ayush.netpulse.ui.usage.StickyUsageSummaryBar
 import com.ayush.netpulse.ui.usage.UsageTab
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     uiState: DashboardUiState,
@@ -46,7 +69,7 @@ fun MainScreen(
     onReconcileUsage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var currentScreen by rememberSaveable { mutableStateOf(NavScreen.DASHBOARD) }
+    var currentScreen by rememberSaveable { mutableStateOf(NavScreen.OVERVIEW) }
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var openSettingsDirectlyToLogs by rememberSaveable { mutableStateOf(false) }
 
@@ -93,59 +116,134 @@ fun MainScreen(
             modifier = modifier
         )
     } else {
+        // Handle Back button: on Usage tab, navigate back to Overview first
+        BackHandler(enabled = currentScreen != NavScreen.OVERVIEW) {
+            currentScreen = NavScreen.OVERVIEW
+        }
+
         Scaffold(
             modifier = modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
-            bottomBar = {
-                Column {
-                    // Sticky Usage Summary: Permanently fixed directly above bottom navigation on Usage screen
-                    if (currentScreen == NavScreen.USAGE && uiState.hasUsageAccessPermission) {
-                        StickyUsageSummaryBar(
-                            totalMobileBytes = usageSummary.first,
-                            totalWifiBytes = usageSummary.second,
-                            totalCombinedBytes = usageSummary.first + usageSummary.second,
-                            daysCount = 90,
-                            recordedDaysCount = usageSummary.third
-                        )
-                    }
+            topBar = {
+                Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+                    TopAppBar(
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "NetPulse",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
 
-                    // Bottom Navigation: Clean 2-tab navigation (Dashboard | Usage)
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 8.dp
+                                // Discreet monitoring status indicator badge
+                                val isMonitoring = uiState.isBackgroundServiceRunning || uiState.isMonitoringActive
+                                val npColors = LocalNetPulseColors.current
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isMonitoring) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(
+                                        0.5.dp,
+                                        if (isMonitoring) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isMonitoring) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        )
+                                        Text(
+                                            text = if (isMonitoring) "Live" else "Paused",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontSize = 11.sp,
+                                            color = if (isMonitoring) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = {
+                                openSettingsDirectlyToLogs = false
+                                isSettingsOpen = true
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.background
+                        )
+                    )
+
+                    // Primary Tabs: Overview | Usage
+                    PrimaryTabRow(
+                        selectedTabIndex = currentScreen.ordinal,
+                        containerColor = MaterialTheme.colorScheme.background,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        divider = {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                thickness = 0.5.dp
+                            )
+                        }
                     ) {
                         NavScreen.values().forEach { screen ->
                             val selected = currentScreen == screen
-                            NavigationBarItem(
+                            Tab(
                                 selected = selected,
                                 onClick = { currentScreen = screen },
+                                text = {
+                                    Text(
+                                        text = screen.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
                                 icon = {
                                     Icon(
                                         imageVector = screen.icon,
-                                        contentDescription = screen.title
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 },
-                                label = {
-                                    Text(
-                                        text = screen.title,
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primary,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                selectedContentColor = MaterialTheme.colorScheme.primary,
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
+            },
+            bottomBar = {
+                // Sticky Usage Summary: Pinned only on Usage screen
+                if (currentScreen == NavScreen.USAGE && uiState.hasUsageAccessPermission) {
+                    StickyUsageSummaryBar(
+                        totalMobileBytes = usageSummary.first,
+                        totalWifiBytes = usageSummary.second,
+                        totalCombinedBytes = usageSummary.first + usageSummary.second,
+                        daysCount = 90,
+                        recordedDaysCount = usageSummary.third
+                    )
+                }
             }
         ) { innerPadding ->
             when (currentScreen) {
-                NavScreen.DASHBOARD -> {
+                NavScreen.OVERVIEW -> {
                     DashboardTab(
                         uiState = uiState,
                         onToggleMonitoring = onToggleMonitoring,
@@ -159,6 +257,7 @@ fun MainScreen(
                             openSettingsDirectlyToLogs = false
                             isSettingsOpen = true
                         },
+                        onRequestUsageAccess = onRequestUsageAccess,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
