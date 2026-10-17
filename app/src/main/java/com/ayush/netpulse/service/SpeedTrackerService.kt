@@ -336,11 +336,12 @@ class SpeedTrackerService : Service() {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(speedTitle)
             .setContentText(usageSummary)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
+            .setShowWhen(false)
             .setContentIntent(pendingOpenApp)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
 
@@ -425,11 +426,12 @@ class SpeedTrackerService : Service() {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(speedTitle)
             .setContentText(usageSummary)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
+            .setShowWhen(false)
             .setContentIntent(pendingOpenApp)
 
         if (isDetailed) {
@@ -470,15 +472,23 @@ class SpeedTrackerService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Delete legacy low-importance channel so OS migrates to promoted channel
+            try {
+                notificationManager.deleteNotificationChannel("netpulse_live_speed_channel")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not delete legacy notification channel: ${e.message}")
+            }
+
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "NetPulse Speed Monitor",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Displays continuous internet speed in status bar notification"
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -515,7 +525,7 @@ class SpeedTrackerService : Service() {
 
     companion object {
         private const val TAG = "SpeedTrackerService"
-        const val CHANNEL_ID = "netpulse_live_speed_channel"
+        const val CHANNEL_ID = "netpulse_speed_meter_channel_v2"
         const val NOTIFICATION_ID = 1001
 
         const val ACTION_START = "com.ayush.netpulse.action.START"

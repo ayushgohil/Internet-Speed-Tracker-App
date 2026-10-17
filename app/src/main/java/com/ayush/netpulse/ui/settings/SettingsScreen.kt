@@ -189,8 +189,12 @@ fun SettingsScreen(
                 HorizontalDivider(color = DarkCardBorder, thickness = 0.5.dp)
 
                 PermissionItem(
-                    name = "Notification Permission",
-                    description = "Required for live speed status bar meter",
+                    name = "Notification & Status Bar",
+                    description = if (uiState.hasNotificationPermission) {
+                        "Promoted priority active • Tap to open system channel settings"
+                    } else {
+                        "Required for live speed status bar meter"
+                    },
                     isGranted = uiState.hasNotificationPermission,
                     statusText = if (uiState.hasNotificationPermission) "Granted" else "Needs Permission",
                     onRequest = onRequestNotificationPermission
