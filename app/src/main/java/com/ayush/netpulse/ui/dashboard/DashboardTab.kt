@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,7 +71,7 @@ fun DashboardTab(
                 downloadFormatted = uiState.liveSpeed.formattedDownload,
                 uploadFormatted = uiState.liveSpeed.formattedUpload,
                 networkType = uiState.networkType,
-                isMonitoringRunning = uiState.isBackgroundServiceRunning || uiState.isMonitoringActive,
+                isMonitoringRunning = uiState.isBackgroundServiceRunning,
                 onToggleMonitoring = onToggleBackgroundService
             )
         }
@@ -131,7 +132,11 @@ private fun LiveSpeedHeroCard(
                 // Compact Monitoring Switch & Label
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { onToggleMonitoring() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     val dotColor by animateColorAsState(
                         targetValue = if (isMonitoringRunning) npColors.download else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -158,7 +163,7 @@ private fun LiveSpeedHeroCard(
                             uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
-                        modifier = Modifier.size(width = 44.dp, height = 24.dp)
+                        modifier = Modifier.scale(0.85f)
                     )
                 }
             }

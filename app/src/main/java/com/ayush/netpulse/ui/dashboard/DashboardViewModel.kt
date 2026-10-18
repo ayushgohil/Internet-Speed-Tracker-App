@@ -72,7 +72,7 @@ class DashboardViewModel(
                 refreshDiagnostics()
                 if (running) {
                     stopLocalMonitoring()
-                } else if (_uiState.value.isMonitoringActive) {
+                } else if (_uiState.value.isMonitoringActive && preferencesManager.isBackgroundMonitoringEnabled) {
                     startLocalMonitoring()
                 }
             }
@@ -216,8 +216,13 @@ class DashboardViewModel(
     fun toggleBackgroundService() {
         val context = getApplication<Application>().applicationContext
         if (_uiState.value.isBackgroundServiceRunning) {
+            preferencesManager.isBackgroundMonitoringEnabled = false
+            _uiState.update { it.copy(isBackgroundServiceRunning = false, isMonitoringActive = false) }
             SpeedTrackerService.stop(context, "User toggled off in UI")
+            stopLocalMonitoring()
         } else {
+            preferencesManager.isBackgroundMonitoringEnabled = true
+            _uiState.update { it.copy(isBackgroundServiceRunning = true, isMonitoringActive = true) }
             SpeedTrackerService.start(context)
         }
         refreshDiagnostics()

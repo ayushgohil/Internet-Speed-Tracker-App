@@ -140,7 +140,7 @@ fun MainScreen(
                                 )
 
                                 // Discreet monitoring status indicator badge
-                                val isMonitoring = uiState.isBackgroundServiceRunning || uiState.isMonitoringActive
+                                val isMonitoring = uiState.isBackgroundServiceRunning
                                 val npColors = LocalNetPulseColors.current
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),

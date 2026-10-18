@@ -167,10 +167,11 @@ class SpeedTrackerService : Service() {
             var lastPrefsWriteTimestamp = 0L
 
             while (isActive) {
+                val loopIterationStart = System.currentTimeMillis()
                 try {
                     val isScreenInteractive = powerManager.isInteractive
                     val isOffline = (currentNetworkType == NetworkType.DISCONNECTED)
-                    val now = System.currentTimeMillis()
+                    val now = loopIterationStart
 
                     val speed = if (isOffline) {
                         LiveSpeed(0L, 0L, now)
@@ -199,7 +200,7 @@ class SpeedTrackerService : Service() {
                     tickCount++
 
                     // Responsive notification & status bar update:
-                    // Target ~1000ms interval when device screen is interactive and displayed metrics change,
+                    // Target exactly 1000ms interval when device screen is interactive,
                     // preserving lower-frequency updates when screen is locked or idle to save battery.
                     val compactSpeed = if (preferencesManager.showSpeedInStatusBar) {
                         SpeedIconGenerator.formatCompactSpeed(speed.downloadBytesPerSec)
@@ -214,22 +215,22 @@ class SpeedTrackerService : Service() {
 
                     val configuredInterval = preferencesManager.notificationRefreshIntervalMs
                     val minNotifInterval = if (isScreenInteractive) {
-                        (configuredInterval - 50L).coerceAtLeast(800L)
+                        (configuredInterval - 250L).coerceAtLeast(700L)
                     } else {
                         4500L
                     }
 
-                    if (signature != lastNotificationSignature && (timeSinceLastNotif >= minNotifInterval || currentNetworkType != lastNotifiedNetworkType)) {
+                    val shouldUpdateNotification = (signature != lastNotificationSignature && (timeSinceLastNotif >= minNotifInterval || currentNetworkType != lastNotifiedNetworkType)) ||
+                            (isScreenInteractive && preferencesManager.showSpeedInStatusBar && timeSinceLastNotif >= 1000L && signature != lastNotificationSignature) ||
+                            (isScreenInteractive && timeSinceLastNotif >= (configuredInterval * 3).coerceAtLeast(4000L))
+
+                    if (shouldUpdateNotification) {
                         lastNotificationSignature = signature
                         lastNotifiedNetworkType = currentNetworkType
                         lastNotificationUpdateTime = now
                         if (BuildConfig.DEBUG && tickCount % 5 == 0) {
                             Log.d(TAG, "Speed sample: rawDown=${speed.downloadBytesPerSec}B/s, rawUp=${speed.uploadBytesPerSec}B/s, iconText=$compactSpeed, style=$currentStyle")
                         }
-                        updateNotificationSafely(speed, currentNetworkType)
-                    } else if (isScreenInteractive && timeSinceLastNotif >= (configuredInterval * 3).coerceAtLeast(4000L)) {
-                        // Heartbeat notification refresh when screen is active
-                        lastNotificationUpdateTime = now
                         updateNotificationSafely(speed, currentNetworkType)
                     }
 
@@ -261,16 +262,15 @@ class SpeedTrackerService : Service() {
                         }
                     }
 
-                    // Adaptive sleep interval to preserve battery overnight:
-                    // Interactive: 1000ms
-                    // Screen locked + online: 5000ms
-                    // Screen locked + offline (disconnected / airplane mode): 10000ms (10s)
-                    val delayTime = when {
+                    // Adaptive sleep interval with drift compensation for precise 1-second cadence:
+                    val targetInterval = when {
                         isScreenInteractive -> 1000L
                         isOffline -> 10000L
                         else -> 5000L
                     }
-                    delay(delayTime)
+                    val loopDuration = System.currentTimeMillis() - loopIterationStart
+                    val sleepTime = (targetInterval - loopDuration).coerceIn(100L, targetInterval)
+                    delay(sleepTime)
 
                 } catch (e: CancellationException) {
                     throw e // propagate coroutine cancellation cleanly
