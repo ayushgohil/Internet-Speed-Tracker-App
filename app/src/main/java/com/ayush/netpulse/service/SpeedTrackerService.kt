@@ -429,6 +429,7 @@ class SpeedTrackerService : Service() {
         }
 
         val isDetailed = (preferencesManager.notificationStyle == "Detailed")
+        val brandColor = if (preferencesManager.appTheme == "Light") 0xFF293D91.toInt() else 0xFF8EA5FF.toInt()
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(speedTitle)
@@ -439,7 +440,15 @@ class SpeedTrackerService : Service() {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setShowWhen(false)
+            .setWhen(System.currentTimeMillis())
+            .setColor(brandColor)
+            .setLocalOnly(true)
+            .setSortKey("!_0_netpulse_live_speed")
             .setContentIntent(pendingOpenApp)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        }
 
         if (isDetailed) {
             val stopIntent = Intent(this, SpeedTrackerService::class.java).apply {
@@ -479,19 +488,27 @@ class SpeedTrackerService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Delete legacy low-importance channel so OS migrates to promoted channel
-            try {
-                notificationManager.deleteNotificationChannel("netpulse_live_speed_channel")
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not delete legacy notification channel: ${e.message}")
+            // Delete legacy lower-importance channels so OS promotes NetPulse to high/urgent
+            val legacyChannels = listOf(
+                "netpulse_speed_meter_channel_v3",
+                "netpulse_speed_meter_channel_v2",
+                "netpulse_promoted_live_speed_v2",
+                "netpulse_live_speed_channel"
+            )
+            legacyChannels.forEach { legacyId ->
+                try {
+                    notificationManager.deleteNotificationChannel(legacyId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not delete legacy channel $legacyId: ${e.message}")
+                }
             }
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "NetPulse Speed Monitor",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Displays continuous internet speed in status bar notification"
+                description = "Real-time internet speed indicator in status bar"
                 setShowBadge(false)
                 enableVibration(false)
                 setSound(null, null)
@@ -532,7 +549,7 @@ class SpeedTrackerService : Service() {
 
     companion object {
         private const val TAG = "SpeedTrackerService"
-        const val CHANNEL_ID = "netpulse_speed_meter_channel_v2"
+        const val CHANNEL_ID = "netpulse_speed_meter_urgent_v4"
         const val NOTIFICATION_ID = 1001
 
         const val ACTION_START = "com.ayush.netpulse.action.START"

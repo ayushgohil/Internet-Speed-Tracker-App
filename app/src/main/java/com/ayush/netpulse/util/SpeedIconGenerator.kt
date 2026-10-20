@@ -91,12 +91,13 @@ object SpeedIconGenerator {
                 isAntiAlias = true
                 isSubpixelText = true
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isFakeBoldText = true // Extra bold and punchy for maximum status bar visibility
                 textAlign = Paint.Align.CENTER
                 textSize = when (comp.value.length) {
-                    1 -> 54f // "0", "5"
-                    2 -> 50f // "84", "15"
-                    3 -> 42f // "300", "999"
-                    else -> 34f
+                    1 -> 72f // "0", "5" - large prominent single digit filling upper canvas
+                    2 -> 62f // "84", "15" - bold double digit
+                    3 -> 48f // "300", "999" - crisp triple digit
+                    else -> 38f // "1200+"
                 }
             }
 
@@ -105,8 +106,9 @@ object SpeedIconGenerator {
                 isAntiAlias = true
                 isSubpixelText = true
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                isFakeBoldText = true
                 textAlign = Paint.Align.CENTER
-                textSize = 26f // "KB/s" or "MB/s"
+                textSize = 22f // "KB/s" or "MB/s"
             }
 
             val numBounds = Rect()
@@ -117,7 +119,7 @@ object SpeedIconGenerator {
             unitPaint.getTextBounds(comp.unit, 0, comp.unit.length, unitBounds)
             val h2 = unitBounds.height().toFloat()
 
-            val gap = 4f
+            val gap = 2f
             val totalHeight = h1 + gap + h2
 
             val topY = (BITMAP_SIZE - totalHeight) / 2f
