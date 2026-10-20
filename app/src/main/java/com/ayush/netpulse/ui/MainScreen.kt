@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,8 +35,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,7 +53,10 @@ import com.ayush.netpulse.ui.theme.LocalNetPulseColors
 import com.ayush.netpulse.ui.usage.StickyUsageSummaryBar
 import com.ayush.netpulse.ui.usage.UsageTab
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
 @Composable
 fun MainScreen(
     uiState: DashboardUiState,
@@ -69,7 +76,9 @@ fun MainScreen(
     onReconcileUsage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var currentScreen by rememberSaveable { mutableStateOf(NavScreen.OVERVIEW) }
+    val screens = remember { NavScreen.values() }
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { screens.size })
+    val coroutineScope = rememberCoroutineScope()
     var isSettingsOpen by rememberSaveable { mutableStateOf(false) }
     var openSettingsDirectlyToLogs by rememberSaveable { mutableStateOf(false) }
 
@@ -117,8 +126,10 @@ fun MainScreen(
         )
     } else {
         // Handle Back button: on Usage tab, navigate back to Overview first
-        BackHandler(enabled = currentScreen != NavScreen.OVERVIEW) {
-            currentScreen = NavScreen.OVERVIEW
+        BackHandler(enabled = pagerState.currentPage != 0) {
+            coroutineScope.launch {
+                pagerState.animateScrollToPage(0)
+            }
         }
 
         Scaffold(
@@ -193,7 +204,7 @@ fun MainScreen(
 
                     // Primary Tabs: Overview | Usage
                     PrimaryTabRow(
-                        selectedTabIndex = currentScreen.ordinal,
+                        selectedTabIndex = pagerState.currentPage,
                         containerColor = MaterialTheme.colorScheme.background,
                         contentColor = MaterialTheme.colorScheme.primary,
                         divider = {
@@ -203,11 +214,15 @@ fun MainScreen(
                             )
                         }
                     ) {
-                        NavScreen.values().forEach { screen ->
-                            val selected = currentScreen == screen
+                        screens.forEach { screen ->
+                            val selected = pagerState.currentPage == screen.ordinal
                             Tab(
                                 selected = selected,
-                                onClick = { currentScreen = screen },
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(screen.ordinal)
+                                    }
+                                },
                                 text = {
                                     Text(
                                         text = screen.title,
@@ -231,7 +246,7 @@ fun MainScreen(
             },
             bottomBar = {
                 // Sticky Usage Summary: Pinned only on Usage screen
-                if (currentScreen == NavScreen.USAGE && uiState.hasUsageAccessPermission) {
+                if (pagerState.currentPage == NavScreen.USAGE.ordinal && uiState.hasUsageAccessPermission) {
                     StickyUsageSummaryBar(
                         totalMobileBytes = usageSummary.first,
                         totalWifiBytes = usageSummary.second,
@@ -242,37 +257,46 @@ fun MainScreen(
                 }
             }
         ) { innerPadding ->
-            when (currentScreen) {
-                NavScreen.OVERVIEW -> {
-                    DashboardTab(
-                        uiState = uiState,
-                        onToggleMonitoring = onToggleMonitoring,
-                        onToggleBackgroundService = onToggleBackgroundService,
-                        onNavigateToUsage = { currentScreen = NavScreen.USAGE },
-                        onNavigateToLogs = {
-                            openSettingsDirectlyToLogs = true
-                            isSettingsOpen = true
-                        },
-                        onOpenSettings = {
-                            openSettingsDirectlyToLogs = false
-                            isSettingsOpen = true
-                        },
-                        onRequestUsageAccess = onRequestUsageAccess,
-                        onRequestBatteryOptimization = onRequestBatteryOptimization,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
-                NavScreen.USAGE -> {
-                    UsageTab(
-                        recentDailyRecords = uiState.recentDailyRecords,
-                        hasUsageAccessPermission = uiState.hasUsageAccessPermission,
-                        isLoadingUsage = uiState.isLoadingUsage,
-                        isReconcilingUsage = uiState.isReconcilingUsage,
-                        onRequestUsageAccess = onRequestUsageAccess,
-                        onRefreshUsage = onRefreshUsage,
-                        lazyListState = usageLazyListState,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) { page ->
+                when (screens[page]) {
+                    NavScreen.OVERVIEW -> {
+                        DashboardTab(
+                            uiState = uiState,
+                            onToggleMonitoring = onToggleMonitoring,
+                            onToggleBackgroundService = onToggleBackgroundService,
+                            onNavigateToUsage = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(NavScreen.USAGE.ordinal)
+                                }
+                            },
+                            onNavigateToLogs = {
+                                openSettingsDirectlyToLogs = true
+                                isSettingsOpen = true
+                            },
+                            onOpenSettings = {
+                                openSettingsDirectlyToLogs = false
+                                isSettingsOpen = true
+                            },
+                            onRequestUsageAccess = onRequestUsageAccess,
+                            onRequestBatteryOptimization = onRequestBatteryOptimization
+                        )
+                    }
+                    NavScreen.USAGE -> {
+                        UsageTab(
+                            recentDailyRecords = uiState.recentDailyRecords,
+                            hasUsageAccessPermission = uiState.hasUsageAccessPermission,
+                            isLoadingUsage = uiState.isLoadingUsage,
+                            isReconcilingUsage = uiState.isReconcilingUsage,
+                            onRequestUsageAccess = onRequestUsageAccess,
+                            onRefreshUsage = onRefreshUsage,
+                            lazyListState = usageLazyListState
+                        )
+                    }
                 }
             }
         }

@@ -188,9 +188,13 @@ class DashboardViewModel(
         _uiState.update { it.copy(diagnosticsInfo = diag) }
     }
 
-    fun loadDailyDataUsage(forceReconcile: Boolean = false) {
+    private var autoRefreshJob: kotlinx.coroutines.Job? = null
+
+    fun loadDailyDataUsage(forceReconcile: Boolean = false, isSilent: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingUsage = true, usageErrorMessage = null) }
+            if (!isSilent) {
+                _uiState.update { it.copy(isLoadingUsage = true, usageErrorMessage = null) }
+            }
             val result = repository.getTodayDataUsage(forceReconcile = forceReconcile)
             result.onSuccess { usage ->
                 _uiState.update {
@@ -211,6 +215,23 @@ class DashboardViewModel(
                 refreshDiagnostics()
             }
         }
+    }
+
+    private fun startAutoRefresh() {
+        autoRefreshJob?.cancel()
+        autoRefreshJob = viewModelScope.launch {
+            while (isActive) {
+                kotlinx.coroutines.delay(10000L) // Auto-refresh consumption every 10 seconds
+                if (_uiState.value.hasUsageAccessPermission) {
+                    loadDailyDataUsage(forceReconcile = false, isSilent = true)
+                }
+            }
+        }
+    }
+
+    private fun stopAutoRefresh() {
+        autoRefreshJob?.cancel()
+        autoRefreshJob = null
     }
 
     fun toggleBackgroundService() {
@@ -253,9 +274,11 @@ class DashboardViewModel(
         if (!_uiState.value.isBackgroundServiceRunning && _uiState.value.isMonitoringActive && !preferencesManager.isBackgroundMonitoringEnabled) {
             startLocalMonitoring()
         }
+        startAutoRefresh()
     }
 
     fun onPauseScreen() {
+        stopAutoRefresh()
         if (!_uiState.value.isBackgroundServiceRunning && !preferencesManager.isBackgroundMonitoringEnabled) {
             stopLocalMonitoring()
         }
