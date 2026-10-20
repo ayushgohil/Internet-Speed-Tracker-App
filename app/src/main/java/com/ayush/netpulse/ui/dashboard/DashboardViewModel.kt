@@ -246,6 +246,10 @@ class DashboardViewModel(
 
     fun onResumeScreen() {
         refreshPermissionsAndUsage()
+        if (preferencesManager.isBackgroundMonitoringEnabled && !SpeedTrackerService.isServiceRunningState.value) {
+            val context = getApplication<Application>().applicationContext
+            SpeedTrackerService.start(context)
+        }
         if (!_uiState.value.isBackgroundServiceRunning && _uiState.value.isMonitoringActive && !preferencesManager.isBackgroundMonitoringEnabled) {
             startLocalMonitoring()
         }

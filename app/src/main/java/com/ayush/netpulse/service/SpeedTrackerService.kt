@@ -1,5 +1,6 @@
 package com.ayush.netpulse.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.ayush.netpulse.BuildConfig
@@ -41,6 +43,7 @@ class SpeedTrackerService : Service() {
     private var trackerJob: Job? = null
     private var networkObserverJob: Job? = null
     private var currentNetworkType: NetworkType = NetworkType.DISCONNECTED
+    private var isExplicitUserStop: Boolean = false
 
     private lateinit var notificationManager: NotificationManager
     private lateinit var preferencesManager: PreferencesManager
@@ -78,11 +81,15 @@ class SpeedTrackerService : Service() {
 
         when (action) {
             ACTION_STOP -> {
+                isExplicitUserStop = true
+                cancelRestartAlarm(this)
                 val reason = intent.getStringExtra(EXTRA_STOP_REASON) ?: "Stopped by user"
                 stopForegroundMonitoring(reason)
                 return START_NOT_STICKY
             }
             ACTION_START -> {
+                isExplicitUserStop = false
+                cancelRestartAlarm(this)
                 if (_isServiceRunningState.value && trackerJob?.isActive == true) {
                     Log.d(TAG, "Service is already running actively; updating notification and skipping re-initialization")
                     updateNotificationSafely(_liveSpeedState.value, currentNetworkType)
@@ -92,6 +99,8 @@ class SpeedTrackerService : Service() {
                 return START_STICKY
             }
             else -> {
+                isExplicitUserStop = false
+                cancelRestartAlarm(this)
                 startForegroundMonitoring()
                 return START_STICKY
             }
@@ -519,9 +528,13 @@ class SpeedTrackerService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Swiping app from recent tasks must not kill monitoring if user enabled it
+        // Swiping app from recent tasks must not permanently kill monitoring if user enabled it
         Log.d(TAG, "onTaskRemoved called; monitoring enabled: ${preferencesManager.isBackgroundMonitoringEnabled}")
-        if (!preferencesManager.isBackgroundMonitoringEnabled) {
+        if (preferencesManager.isBackgroundMonitoringEnabled) {
+            // Android may terminate background processes after removing from recents.
+            // Schedule an alarm to revive the foreground service immediately.
+            scheduleRestartAlarm(applicationContext, 1000L)
+        } else {
             stopForegroundMonitoring("App swiped from recent tasks while disabled")
         }
         super.onTaskRemoved(rootIntent)
@@ -532,11 +545,13 @@ class SpeedTrackerService : Service() {
         val now = System.currentTimeMillis()
         preferencesManager.lastServiceDestroyTimestamp = now
 
-        if (preferencesManager.isBackgroundMonitoringEnabled) {
+        if (preferencesManager.isBackgroundMonitoringEnabled && !isExplicitUserStop) {
             val reason = "Service destroyed by OS lifecycle callback"
             preferencesManager.lastServiceStopReason = reason
             preferencesManager.lastKnownServiceState = "Destroyed by OS"
-            Log.w(TAG, "SpeedTrackerService onDestroy while monitoring was enabled: $reason")
+            Log.w(TAG, "SpeedTrackerService onDestroy while monitoring was enabled: $reason; scheduling revival alarm")
+            // System killed or reclaimed the service overnight/idle; schedule revival
+            scheduleRestartAlarm(applicationContext, 1200L)
         } else {
             preferencesManager.lastKnownServiceState = "Stopped"
         }
@@ -565,18 +580,76 @@ class SpeedTrackerService : Service() {
         private val _activeNetworkTypeState = MutableStateFlow(NetworkType.DISCONNECTED)
         val activeNetworkTypeState: StateFlow<NetworkType> = _activeNetworkTypeState.asStateFlow()
 
+        fun scheduleRestartAlarm(context: Context, delayMillis: Long = 1000L) {
+            try {
+                val intent = Intent(context, ServiceRestartReceiver::class.java).apply {
+                    action = ServiceRestartReceiver.ACTION_RESTART_SERVICE
+                }
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                val pendingIntent = PendingIntent.getBroadcast(context, 1001, intent, flags)
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+                val triggerAt = SystemClock.elapsedRealtime() + delayMillis
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            triggerAt,
+                            pendingIntent
+                        )
+                    } else {
+                        alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            triggerAt,
+                            pendingIntent
+                        )
+                    }
+                } else {
+                    alarmManager.set(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        triggerAt,
+                        pendingIntent
+                    )
+                }
+                Log.d(TAG, "Scheduled restart alarm for ${delayMillis}ms in future")
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to schedule restart alarm: ${e.message}", e)
+            }
+        }
+
+        fun cancelRestartAlarm(context: Context) {
+            try {
+                val intent = Intent(context, ServiceRestartReceiver::class.java).apply {
+                    action = ServiceRestartReceiver.ACTION_RESTART_SERVICE
+                }
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                val pendingIntent = PendingIntent.getBroadcast(context, 1001, intent, flags)
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                alarmManager?.cancel(pendingIntent)
+                Log.d(TAG, "Cancelled restart alarm")
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to cancel restart alarm: ${e.message}", e)
+            }
+        }
+
         fun start(context: Context) {
             val intent = Intent(context, SpeedTrackerService::class.java).apply {
                 action = ACTION_START
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to start foreground service directly: ${e.message}; scheduling revival alarm", e)
+                scheduleRestartAlarm(context, 1000L)
             }
         }
 
         fun stop(context: Context, reason: String = "Stopped by user") {
+            cancelRestartAlarm(context)
             val intent = Intent(context, SpeedTrackerService::class.java).apply {
                 action = ACTION_STOP
                 putExtra(EXTRA_STOP_REASON, reason)

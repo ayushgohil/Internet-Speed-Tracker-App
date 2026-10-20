@@ -28,6 +28,12 @@ class NetPulseApp : Application() {
         super.onCreate()
         instance = this
         com.ayush.netpulse.worker.LogRetentionWorker.enqueuePeriodic(this)
+        com.ayush.netpulse.worker.ServiceWatchdogWorker.enqueuePeriodic(this)
+
+        // If background monitoring is enabled by the user and not currently active, revive it
+        if (preferencesManager.isBackgroundMonitoringEnabled && !com.ayush.netpulse.service.SpeedTrackerService.isServiceRunningState.value) {
+            com.ayush.netpulse.service.SpeedTrackerService.start(this)
+        }
     }
 
     companion object {

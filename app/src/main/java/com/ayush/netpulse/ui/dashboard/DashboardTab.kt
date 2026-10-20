@@ -56,8 +56,11 @@ fun DashboardTab(
     onNavigateToLogs: () -> Unit,
     onOpenSettings: () -> Unit,
     onRequestUsageAccess: () -> Unit = {},
+    onRequestBatteryOptimization: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val npColors = LocalNetPulseColors.current
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -76,7 +79,68 @@ fun DashboardTab(
             )
         }
 
-        // 2. COMPACT TODAY'S DATA CONSUMPTION CARD
+        // 2. OVERNIGHT RESILIENCE ADVISORY (Shown when battery is still restricted / optimized)
+        if (!uiState.isBatteryOptimizationIgnored) {
+            item(key = "battery_optimization_advisory") {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onRequestBatteryOptimization() },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, npColors.warning.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(npColors.warning.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SignalWifiOff,
+                                contentDescription = null,
+                                tint = npColors.warning,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Keep Active Overnight",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Allow Unrestricted Battery so Android doesn't kill the notification when offline overnight.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Text(
+                            text = "Allow",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. COMPACT TODAY'S DATA CONSUMPTION CARD
         item(key = "today_consumption") {
             TodayConsumptionCard(
                 hasPermission = uiState.hasUsageAccessPermission,

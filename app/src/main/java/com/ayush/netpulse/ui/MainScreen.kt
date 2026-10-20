@@ -258,6 +258,7 @@ fun MainScreen(
                             isSettingsOpen = true
                         },
                         onRequestUsageAccess = onRequestUsageAccess,
+                        onRequestBatteryOptimization = onRequestBatteryOptimization,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
