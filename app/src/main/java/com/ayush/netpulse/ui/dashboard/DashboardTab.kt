@@ -28,25 +28,31 @@ import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.ui.theme.LocalNetPulseColors
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardTab(
     uiState: DashboardUiState,
@@ -57,17 +63,31 @@ fun DashboardTab(
     onOpenSettings: () -> Unit,
     onRequestUsageAccess: () -> Unit = {},
     onRequestBatteryOptimization: () -> Unit = {},
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val npColors = LocalNetPulseColors.current
+    val pullRefreshState = rememberPullToRefreshState()
 
-    LazyColumn(
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            onRefresh()
+            pullRefreshState.endRefresh()
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .nestedScroll(pullRefreshState.nestedScrollConnection)
     ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
         // 1. UNIFIED LIVE NETWORK ACTIVITY HERO
         item(key = "live_speed_hero") {
             LiveSpeedHeroCard(
@@ -153,6 +173,14 @@ fun DashboardTab(
             )
         }
     }
+
+    PullToRefreshContainer(
+        state = pullRefreshState,
+        modifier = Modifier.align(Alignment.TopCenter),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.primary
+    )
+}
 }
 
 /**

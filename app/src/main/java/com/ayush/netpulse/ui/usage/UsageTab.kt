@@ -33,6 +33,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -42,7 +43,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +110,7 @@ fun UsageTab(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UsageTab(
     recentDailyRecords: List<DailyUsageEntity>,
@@ -123,9 +135,32 @@ fun UsageTab(
         daysList.reversed()
     }
 
-    // Group reversed list by Year-Month for clean month section headers
-    val groupedByMonth = remember(reversedDaysList) {
-        reversedDaysList.groupBy { it.dateStr.substring(0, 7) }
+    // Incremental scroll loading: start with 20 items for instant initial layout, expand on scroll
+    var visibleDaysLimit by rememberSaveable { mutableStateOf(20) }
+
+    val visibleDaysList = remember(reversedDaysList, visibleDaysLimit) {
+        reversedDaysList.take(visibleDaysLimit)
+    }
+
+    // Group incrementally loaded subset by Year-Month
+    val groupedByMonth = remember(visibleDaysList) {
+        visibleDaysList.groupBy { it.dateStr.substring(0, 7) }
+    }
+
+    // Automatically load next chunk when scrolling near bottom
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val layoutInfo = lazyListState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            totalItems > 0 && lastVisibleIndex >= totalItems - 3
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore && visibleDaysLimit < reversedDaysList.size) {
+            visibleDaysLimit = (visibleDaysLimit + 20).coerceAtMost(reversedDaysList.size)
+        }
     }
 
     // Month parsing & formatting
@@ -175,14 +210,27 @@ fun UsageTab(
         return
     }
 
-    LazyColumn(
-        state = lazyListState,
+    val pullRefreshState = rememberPullToRefreshState()
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            onRefreshUsage()
+            pullRefreshState.endRefresh()
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .nestedScroll(pullRefreshState.nestedScrollConnection)
     ) {
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         // 1. Compact Header: Usage | Refresh
         item(key = "header") {
             Spacer(modifier = Modifier.height(4.dp))
@@ -332,10 +380,35 @@ fun UsageTab(
             }
         }
 
+        if (visibleDaysLimit < reversedDaysList.size) {
+            item(key = "loading_more_days_indicator") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
         item(key = "footer_spacer") {
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
+
+    PullToRefreshContainer(
+        state = pullRefreshState,
+        modifier = Modifier.align(Alignment.TopCenter),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.primary
+    )
+}
 
     // Detail Breakdown Dialog
     selectedDayDetail?.let { cell ->
@@ -382,12 +455,10 @@ private fun CalendarHeatmapCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Horizontally scrollable weeks grid
-            val scrollState = rememberScrollState()
+            // Center weeks grid smoothly without horizontalScroll touch conflict
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(scrollState)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
             ) {
                 // Weekday labels column (Mon, Wed, Fri)
                 Column(

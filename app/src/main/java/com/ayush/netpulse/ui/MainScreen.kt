@@ -259,6 +259,7 @@ fun MainScreen(
         ) { innerPadding ->
             HorizontalPager(
                 state = pagerState,
+                beyondBoundsPageCount = 1,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
@@ -283,7 +284,8 @@ fun MainScreen(
                                 isSettingsOpen = true
                             },
                             onRequestUsageAccess = onRequestUsageAccess,
-                            onRequestBatteryOptimization = onRequestBatteryOptimization
+                            onRequestBatteryOptimization = onRequestBatteryOptimization,
+                            onRefresh = onRefreshUsage
                         )
                     }
                     NavScreen.USAGE -> {
