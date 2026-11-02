@@ -21,6 +21,18 @@ android {
         }
     }
 
+    // Shared debug key (committed on purpose): every debug build, local or from GitHub Actions,
+    // is signed with the same key, so a new APK installs over the old one without uninstalling.
+    // Debug builds only; never use this key for a release.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
