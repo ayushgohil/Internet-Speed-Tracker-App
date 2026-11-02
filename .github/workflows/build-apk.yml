@@ -1,7 +1,9 @@
 name: Build debug APK
 
-# Builds app-debug.apk on every push so it can be downloaded from the GitHub website:
-# Actions tab -> latest run -> "Artifacts" section at the bottom -> app-debug.
+# Builds two APKs on every push so they can be downloaded from the GitHub website:
+# Actions tab -> latest run -> "Artifacts" section at the bottom:
+#   app-debug   = debug build (slower, for development)
+#   app-release = optimised build (smooth, use this one to judge real performance)
 on:
   push:
   workflow_dispatch:   # also lets you run it manually from the Actions tab
@@ -30,20 +32,31 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Build debug and release APKs
+        run: ./gradlew assembleDebug assembleRelease --stacktrace
 
       # Informational: prints the key the APK is signed with. It should be identical on every build.
       - name: Show APK signing certificate
         continue-on-error: true
         run: |
           APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
-          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
+          for apk in app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release.apk; do
+            echo "== $apk"
+            "$APKSIGNER" verify --print-certs "$apk"
+          done
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

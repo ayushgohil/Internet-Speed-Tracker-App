@@ -21,9 +21,10 @@ android {
         }
     }
 
-    // Shared debug key (committed on purpose): every debug build, local or from GitHub Actions,
-    // is signed with the same key, so a new APK installs over the old one without uninstalling.
-    // Debug builds only; never use this key for a release.
+    // Shared debug key (committed on purpose): every build, local or from GitHub Actions, is signed
+    // with the same key, so a new APK installs over the old one without uninstalling.
+    // It also signs the release build below so that one can be tested on a phone. It is NOT a real
+    // release key: never publish to the Play Store with it.
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
@@ -35,7 +36,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinking/optimisation + resource shrinking: much smoother and smaller than debug.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // Same shared key as debug, so the release APK installs over (and updates) the debug one.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
