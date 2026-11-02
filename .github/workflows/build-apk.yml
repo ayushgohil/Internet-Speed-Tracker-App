@@ -45,6 +45,24 @@ jobs:
             "$APKSIGNER" verify --print-certs "$apk"
           done
 
+      # Informational: facts that decide whether a phone will accept the APK (package, version,
+      # minimum Android, debuggable flag, signature schemes, zip integrity).
+      - name: Inspect APKs
+        continue-on-error: true
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          for apk in app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release.apk; do
+            echo "=================== $apk"
+            ls -l "$apk"
+            echo "-- zip test:"; unzip -tq "$apk" | tail -1
+            echo "-- manifest facts:"
+            "$BT/aapt2" dump badging "$apk" | grep -E "^package:|^sdkVersion|^targetSdkVersion|^application-debuggable|^native-code|^launchable-activity" || true
+            echo "-- key files in the APK:"
+            unzip -l "$apk" | grep -E "AndroidManifest.xml|classes[0-9]*.dex|resources.arsc" || true
+            echo "-- signature verification:"
+            "$BT/apksigner" verify -v "$apk" | grep -E "^Verifies|^Verified using|^Number of signers" || true
+          done
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
