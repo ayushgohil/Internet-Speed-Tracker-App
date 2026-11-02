@@ -1,0 +1,42 @@
+name: Build debug APK
+
+# Builds app-debug.apk on every push so it can be downloaded from the GitHub website:
+# Actions tab -> latest run -> "Artifacts" section at the bottom -> app-debug.
+on:
+  push:
+  workflow_dispatch:   # also lets you run it manually from the Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      # gradle.properties pins a Windows JDK path for local builds; it doesn't exist on this runner.
+      # This only edits the temporary checkout, not the repository.
+      - name: Use the runner's JDK instead of the Windows path
+        run: sed -i '/^org.gradle.java.home=/d' gradle.properties
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
