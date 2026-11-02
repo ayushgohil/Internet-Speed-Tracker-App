@@ -15,6 +15,10 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
+        // Optional, for diagnosing install problems: -PappIdSuffix=.test builds the app under a
+        // different package name so it installs side by side with the normal app.
+        providers.gradleProperty("appIdSuffix").orNull?.let { applicationIdSuffix = it }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true

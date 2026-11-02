@@ -1,0 +1,46 @@
+name: Build test-package APK
+
+# Manual only (Actions tab -> "Build test-package APK" -> Run workflow).
+# Builds the release APK under a DIFFERENT package name (com.ayush.netpulse.test) so it installs
+# side by side with the normal app. If this one installs but the normal one doesn't, the phone has
+# a conflicting copy of the normal app (other user/profile, different signature, leftover data).
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Use the runner's JDK instead of the Windows path
+        run: sed -i '/^org.gradle.java.home=/d' gradle.properties
+
+      - name: Build release APK with a different package name
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease -PappIdSuffix=.test --stacktrace
+
+      - name: Confirm the package name
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BT/aapt2" dump badging app/build/outputs/apk/release/app-release.apk | grep -E "^package:"
+          ls -l app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-test-package
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
