@@ -69,7 +69,9 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.USER_PRESENT" />
-                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+                <!-- Fired by the system-held network callback (ServiceRevival); the old CONNECTIVITY_CHANGE
+                     broadcast is never delivered to manifest receivers on Android 7+. -->
+                <action android:name="com.ayush.netpulse.action.NETWORK_CHANGED" />
             </intent-filter>
         </receiver>
 

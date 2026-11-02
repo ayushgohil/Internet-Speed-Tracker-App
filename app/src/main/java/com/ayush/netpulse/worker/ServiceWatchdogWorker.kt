@@ -30,7 +30,7 @@ class ServiceWatchdogWorker(
         if (isEnabled && !isRunning) {
             Log.w(TAG, "Service is stopped while monitoring was enabled! Reviving service now...")
             try {
-                SpeedTrackerService.start(applicationContext)
+                SpeedTrackerService.start(applicationContext, "watchdog")
             } catch (e: Throwable) {
                 Log.e(TAG, "Watchdog failed to revive service directly; scheduling alarm: ${e.message}", e)
                 SpeedTrackerService.scheduleRestartAlarm(applicationContext, 1000L)

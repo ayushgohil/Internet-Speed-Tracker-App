@@ -1155,6 +1155,20 @@ private fun DiagnosticsDetailsDialog(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                if (diagnostics.revivalLog.isNotBlank()) {
+                    Text(
+                        text = "Recent restart attempts",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = diagnostics.revivalLog,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 11.sp
+                    )
+                }
+
                 if (!diagnostics.lastNotificationException.isNullOrBlank()) {
                     Box(
                         modifier = Modifier

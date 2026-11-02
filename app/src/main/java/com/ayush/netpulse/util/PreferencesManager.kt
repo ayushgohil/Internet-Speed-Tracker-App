@@ -2,6 +2,9 @@ package com.ayush.netpulse.util
 
 import android.content.Context
 import android.content.SharedPreferences
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class PreferencesManager(context: Context) {
 
@@ -76,6 +79,24 @@ class PreferencesManager(context: Context) {
         get() = prefs.getString(KEY_LAST_KNOWN_SERVICE_STATE, "Stopped") ?: "Stopped"
         set(value) = prefs.edit().putString(KEY_LAST_KNOWN_SERVICE_STATE, value).apply()
 
+    /** Consecutive blocked restart attempts, used to back off retries. Reset when the service starts. */
+    var revivalRetryCount: Int
+        get() = prefs.getInt(KEY_REVIVAL_RETRY_COUNT, 0)
+        set(value) = prefs.edit().putInt(KEY_REVIVAL_RETRY_COUNT, value).apply()
+
+    /** Last few restart attempts (source and outcome), kept across app launches for diagnostics. */
+    var revivalLog: String
+        get() = prefs.getString(KEY_REVIVAL_LOG, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_REVIVAL_LOG, value).apply()
+
+    @Synchronized
+    fun appendRevivalLog(source: String, outcome: String) {
+        val stamp = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+        val lines = revivalLog.lines().filter { it.isNotBlank() }.toMutableList()
+        lines.add("$stamp  $source: $outcome")
+        revivalLog = lines.takeLast(MAX_REVIVAL_LOG_LINES).joinToString("\n")
+    }
+
     var showSpeedInStatusBar: Boolean
         get() = prefs.getBoolean(KEY_SHOW_SPEED_IN_STATUS_BAR, false)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_SPEED_IN_STATUS_BAR, value).apply()
@@ -135,6 +156,9 @@ class PreferencesManager(context: Context) {
         private const val KEY_CACHED_TODAY_MOBILE_BYTES = "key_cached_today_mobile_bytes"
         private const val KEY_CACHED_TODAY_WIFI_BYTES = "key_cached_today_wifi_bytes"
         private const val KEY_CACHED_TODAY_DATE = "key_cached_today_date"
+        private const val KEY_REVIVAL_RETRY_COUNT = "key_revival_retry_count"
+        private const val KEY_REVIVAL_LOG = "key_revival_log"
+        private const val MAX_REVIVAL_LOG_LINES = 20
 
         @Volatile
         private var INSTANCE: PreferencesManager? = null

@@ -41,12 +41,14 @@ class ServiceRestartReceiver : BroadcastReceiver() {
 
         if (!SpeedTrackerService.isServiceRunningState.value) {
             Log.i(TAG, "Reviving SpeedTrackerService from action: $action")
-            try {
-                SpeedTrackerService.start(context)
-            } catch (e: Throwable) {
-                Log.e(TAG, "Failed to start service directly from receiver: ${e.message}", e)
-                SpeedTrackerService.scheduleRestartAlarm(context, 2000L)
+            val source = when (action) {
+                ServiceRevival.ACTION_NETWORK_CHANGED -> "network-back"
+                ACTION_RESTART_SERVICE -> "retry-alarm"
+                Intent.ACTION_USER_PRESENT -> "screen-unlock"
+                else -> "receiver:${action.substringAfterLast('.')}"
             }
+            // start() handles blocked starts itself (backoff retry + tap-to-resume notification).
+            SpeedTrackerService.start(context, source)
         } else {
             Log.d(TAG, "SpeedTrackerService is already actively running")
         }

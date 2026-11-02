@@ -176,6 +176,7 @@ class DashboardViewModel(
             lastNotificationException = preferencesManager.lastNotificationException,
             lastServiceDestroyTimestamp = preferencesManager.lastServiceDestroyTimestamp,
             serviceRestartCount = preferencesManager.serviceRestartCount,
+            revivalLog = preferencesManager.revivalLog,
             hasNotificationPermission = _uiState.value.hasNotificationPermission,
             hasUsageAccessPermission = _uiState.value.hasUsageAccessPermission,
             isBatteryOptimizationIgnored = _uiState.value.isBatteryOptimizationIgnored,

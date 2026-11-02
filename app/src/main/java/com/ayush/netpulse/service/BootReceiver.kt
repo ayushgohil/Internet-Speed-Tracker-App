@@ -33,8 +33,10 @@ class BootReceiver : BroadcastReceiver() {
                 }
 
                 Log.d("BootReceiver", "Boot completed or package replaced: restoring SpeedTrackerService")
+                // System-held network callbacks don't survive a reboot or app update; register again.
+                ServiceRevival.registerNetworkWakeup(context)
                 try {
-                    SpeedTrackerService.start(context)
+                    SpeedTrackerService.start(context, "boot")
                     prefs.lastKnownError = null
                 } catch (e: Throwable) {
                     val err = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {

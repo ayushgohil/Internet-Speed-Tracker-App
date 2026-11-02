@@ -23,6 +23,7 @@ data class DiagnosticsInfo(
     val lastNotificationException: String? = null,
     val lastServiceDestroyTimestamp: Long = 0L,
     val serviceRestartCount: Int = 0,
+    val revivalLog: String = "",
     val hasNotificationPermission: Boolean = false,
     val hasUsageAccessPermission: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,

@@ -44,6 +44,8 @@ class SpeedTrackerService : Service() {
     private var networkObserverJob: Job? = null
     private var currentNetworkType: NetworkType = NetworkType.DISCONNECTED
     private var isExplicitUserStop: Boolean = false
+    // Set when Android refused to start us in the foreground; a backoff retry is already scheduled.
+    private var startBlockedByOs: Boolean = false
 
     private lateinit var notificationManager: NotificationManager
     private lateinit var preferencesManager: PreferencesManager
@@ -65,6 +67,7 @@ class SpeedTrackerService : Service() {
         if (intent == null) {
             if (!preferencesManager.isBackgroundMonitoringEnabled) {
                 Log.d(TAG, "System recreated START_STICKY service but user previously disabled monitoring; stopping self")
+                ServiceRevival.unregisterNetworkWakeup(this)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -73,11 +76,12 @@ class SpeedTrackerService : Service() {
             Log.d(TAG, "System recreated START_STICKY service while monitoring was enabled; restoring foreground session")
             preferencesManager.serviceRestartCount = preferencesManager.serviceRestartCount + 1
             preferencesManager.lastKnownServiceState = "Active (Restored by OS)"
-            startForegroundMonitoring()
+            startForegroundMonitoring("system-restart")
             return START_STICKY
         }
 
         val action = intent.action ?: ACTION_START
+        val startSource = intent.getStringExtra(EXTRA_START_SOURCE) ?: "unknown"
 
         when (action) {
             ACTION_STOP -> {
@@ -95,19 +99,20 @@ class SpeedTrackerService : Service() {
                     updateNotificationSafely(_liveSpeedState.value, currentNetworkType)
                     return START_STICKY
                 }
-                startForegroundMonitoring()
+                startForegroundMonitoring(startSource)
                 return START_STICKY
             }
             else -> {
                 isExplicitUserStop = false
                 cancelRestartAlarm(this)
-                startForegroundMonitoring()
+                startForegroundMonitoring(startSource)
                 return START_STICKY
             }
         }
     }
 
-    private fun startForegroundMonitoring() {
+    private fun startForegroundMonitoring(source: String) {
+        startBlockedByOs = false
         preferencesManager.isBackgroundMonitoringEnabled = true
         preferencesManager.lastServiceStartTimestamp = System.currentTimeMillis()
         preferencesManager.lastKnownServiceState = "Active"
@@ -132,15 +137,19 @@ class SpeedTrackerService : Service() {
             preferencesManager.lastKnownError = null
             Log.d(TAG, "startForeground completed successfully with channel $CHANNEL_ID")
         } catch (e: Exception) {
-            val err = "Foreground start exception (${e.javaClass.simpleName}): ${e.message}"
-            Log.e(TAG, err, e)
-            preferencesManager.lastKnownError = err
+            Log.e(TAG, "Foreground start exception (${e.javaClass.simpleName}): ${e.message}", e)
             preferencesManager.lastKnownServiceState = "Start Restricted"
             _isServiceRunningState.value = false
+            startBlockedByOs = true
+            // Don't give up: record why, show a tap-to-resume notification and retry with backoff.
+            ServiceRevival.handleStartFailure(this, source, e)
             stopSelf()
             return
         }
 
+        ServiceRevival.onStartSucceeded(this, source)
+        // Keep a system-held network callback so we get woken (even if killed) when internet returns.
+        ServiceRevival.registerNetworkWakeup(this)
         startSamplingLoops()
     }
 
@@ -402,6 +411,11 @@ class SpeedTrackerService : Service() {
         val repository = (application as NetPulseApp).networkRepository
         repository.resetSpeedBaseline()
 
+        // User turned tracking off: no more wake-ups, retries or resume prompts.
+        ServiceRevival.unregisterNetworkWakeup(this)
+        ServiceRevival.cancelResumePrompt(this)
+        preferencesManager.revivalRetryCount = 0
+
         stopForeground(STOP_FOREGROUND_REMOVE)
         notificationManager.cancel(NOTIFICATION_ID)
         stopSelf()
@@ -545,7 +559,11 @@ class SpeedTrackerService : Service() {
         val now = System.currentTimeMillis()
         preferencesManager.lastServiceDestroyTimestamp = now
 
-        if (preferencesManager.isBackgroundMonitoringEnabled && !isExplicitUserStop) {
+        if (startBlockedByOs) {
+            // A backoff retry was already scheduled when the start was refused; keep it, don't
+            // replace it with the quick 1.2s alarm below (that would hammer the same restriction).
+            Log.d(TAG, "SpeedTrackerService onDestroy after blocked start; keeping backoff retry")
+        } else if (preferencesManager.isBackgroundMonitoringEnabled && !isExplicitUserStop) {
             val reason = "Service destroyed by OS lifecycle callback"
             preferencesManager.lastServiceStopReason = reason
             preferencesManager.lastKnownServiceState = "Destroyed by OS"
@@ -570,6 +588,7 @@ class SpeedTrackerService : Service() {
         const val ACTION_START = "com.ayush.netpulse.action.START"
         const val ACTION_STOP = "com.ayush.netpulse.action.STOP"
         const val EXTRA_STOP_REASON = "extra_stop_reason"
+        const val EXTRA_START_SOURCE = "extra_start_source"
 
         private val _liveSpeedState = MutableStateFlow(LiveSpeed())
         val liveSpeedState: StateFlow<LiveSpeed> = _liveSpeedState.asStateFlow()
@@ -632,9 +651,15 @@ class SpeedTrackerService : Service() {
             }
         }
 
-        fun start(context: Context) {
+        /**
+         * Starts the tracking service. [source] says who asked (boot, watchdog, network-back, ...)
+         * and is stored in the revival log. If Android blocks a background start, this retries
+         * with backoff and posts a tap-to-resume notification instead of failing silently.
+         */
+        fun start(context: Context, source: String = "app") {
             val intent = Intent(context, SpeedTrackerService::class.java).apply {
                 action = ACTION_START
+                putExtra(EXTRA_START_SOURCE, source)
             }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -643,8 +668,8 @@ class SpeedTrackerService : Service() {
                     context.startService(intent)
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "Failed to start foreground service directly: ${e.message}; scheduling revival alarm", e)
-                scheduleRestartAlarm(context, 1000L)
+                Log.e(TAG, "Failed to start foreground service directly: ${e.message}", e)
+                ServiceRevival.handleStartFailure(context, source, e)
             }
         }
 
