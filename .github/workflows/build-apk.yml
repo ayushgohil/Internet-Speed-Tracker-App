@@ -4,9 +4,16 @@ name: Build debug APK
 # Actions tab -> latest run -> "Artifacts" section at the bottom:
 #   app-debug   = debug build (slower, for development)
 #   app-release = optimised build (smooth, use this one to judge real performance)
+#
+# Every build on main is also published as a GitHub Release named "latest", with plain APK files
+# (no zip): NetPulse.apk (optimised) and NetPulse-debug.apk. Stable download link:
+#   https://github.com/ayushgohil/Internet-Speed-Tracker-App/releases/latest/download/NetPulse.apk
 on:
   push:
   workflow_dispatch:   # also lets you run it manually from the Actions tab
+
+permissions:
+  contents: write      # needed to publish the "latest" release
 
 jobs:
   build:
@@ -56,7 +63,7 @@ jobs:
             ls -l "$apk"
             echo "-- zip test:"; unzip -tq "$apk" | tail -1
             echo "-- manifest facts:"
-            "$BT/aapt2" dump badging "$apk" | grep -E "^package:|^sdkVersion|^targetSdkVersion|^application-debuggable|^native-code|^launchable-activity" || true
+            "$BT/aapt2" dump badging "$apk" | grep -E "^package:|^application-label:|^sdkVersion|^targetSdkVersion|^application-debuggable|^native-code|^launchable-activity" || true
             echo "-- key files in the APK:"
             unzip -l "$apk" | grep -E "AndroidManifest.xml|classes[0-9]*.dex|resources.arsc" || true
             echo "-- signature verification:"
@@ -78,3 +85,21 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Publishes plain APK files (no zip) on a release named "latest", replacing the previous one.
+      # Download link for the optimised app:
+      #   https://github.com/ayushgohil/Internet-Speed-Tracker-App/releases/latest/download/NetPulse.apk
+      - name: Publish latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-files
+          cp app/build/outputs/apk/release/app-release.apk release-files/NetPulse.apk
+          cp app/build/outputs/apk/debug/app-debug.apk release-files/NetPulse-debug.apk
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest release-files/NetPulse.apk release-files/NetPulse-debug.apk \
+            --target "$GITHUB_SHA" \
+            --title "NetPulse (latest build)" \
+            --notes "Built from commit ${GITHUB_SHA::7}. NetPulse.apk is the optimised build, NetPulse-debug.apk is the debug build." \
+            --latest
