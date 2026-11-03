@@ -40,7 +40,8 @@ object SpeedIconGenerator {
     private const val MIN_TEXT_SIZE = 12f
     private const val SIZE_STEP = 0.5f
 
-    private val boldTypeface: Typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    // Lazy so the pure text-formatting helpers can run in plain JVM unit tests (no Android runtime).
+    private val boldTypeface: Typeface by lazy { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
 
     private data class RowStyle(val textSize: Float, val scaleX: Float)
 
