@@ -362,10 +362,32 @@ class NetworkRepository(
             preferencesManager.cachedTodayWifiBytes = todayUsage.totalWifiBytes
             preferencesManager.cachedTodayDate = NetworkUtils.formatDateString(now)
 
+            // Monthly data limit: mobile usage since the billing cycle started, then alert if needed
+            updateCycleUsageAndAlerts(now)
+            com.ayush.netpulse.widget.UsageWidgetProvider.refresh(context)
+
             Result.success(todayUsage)
         } catch (e: Exception) {
             preferencesManager.lastKnownError = "Today usage query error: ${e.localizedMessage}"
             Result.failure(e)
+        }
+    }
+
+    private fun updateCycleUsageAndAlerts(now: Long) {
+        if (preferencesManager.dataLimitBytes <= 0L) return
+        try {
+            val cycleStart = com.ayush.netpulse.util.DataLimit.cycleStartMillis(now, preferencesManager.dataLimitCycleDay)
+            @Suppress("DEPRECATION")
+            val bucket = networkStatsManager?.querySummaryForDevice(
+                ConnectivityManager.TYPE_MOBILE,
+                null,
+                cycleStart,
+                now
+            ) ?: return
+            preferencesManager.cachedCycleMobileBytes = bucket.rxBytes + bucket.txBytes
+            com.ayush.netpulse.util.DataLimitNotifier.check(context, preferencesManager)
+        } catch (e: Exception) {
+            Log.w("NetworkRepository", "Could not query data-limit cycle usage: ${e.message}")
         }
     }
 

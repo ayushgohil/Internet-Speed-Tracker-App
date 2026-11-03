@@ -45,6 +45,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import com.ayush.netpulse.util.DataLimit
+import com.ayush.netpulse.util.NetworkUtils
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +84,8 @@ fun SettingsScreen(
     onToggleBackgroundMonitoring: () -> Unit,
     onToggleSpeedInStatusBar: () -> Unit,
     onToggleShowOnLockScreen: () -> Unit,
+    onSetDataLimitGb: (Double) -> Unit,
+    onSetDataLimitCycleDay: (Int) -> Unit,
     onSetSpeedUnit: (String) -> Unit,
     onSetNotificationStyle: (String) -> Unit = {},
     onSetNotificationRefreshInterval: (Long) -> Unit = {},
@@ -107,6 +115,8 @@ fun SettingsScreen(
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
     var showRetentionDialog by remember { mutableStateOf(false) }
+    var showDataLimitDialog by remember { mutableStateOf(false) }
+    var showCycleDayDialog by remember { mutableStateOf(false) }
     var showNotificationStyleDialog by remember { mutableStateOf(false) }
     var showRefreshIntervalDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -236,6 +246,53 @@ fun SettingsScreen(
                     },
                     onClick = { showRefreshIntervalDialog = true }
                 )
+            }
+        }
+
+        // DATA LIMIT
+        item {
+            SectionHeader(title = "Data limit")
+            PreferenceGroup {
+                PreferenceClickableRow(
+                    title = "Monthly mobile data limit",
+                    value = if (uiState.dataLimitBytes > 0L) "${DataLimit.formatGb(uiState.dataLimitBytes)} GB" else "Off",
+                    onClick = { showDataLimitDialog = true }
+                )
+
+                if (uiState.dataLimitBytes > 0L) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+                    PreferenceClickableRow(
+                        title = "Plan renews on day",
+                        value = "${uiState.dataLimitCycleDay}",
+                        onClick = { showCycleDayDialog = true }
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+                    val percent = DataLimit.percentUsed(uiState.cycleMobileBytes, uiState.dataLimitBytes)
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        Text(
+                            text = if (uiState.hasUsageAccessPermission) {
+                                "Used this cycle: ${NetworkUtils.formatBytes(uiState.cycleMobileBytes)} of " +
+                                    "${DataLimit.formatGb(uiState.dataLimitBytes)} GB ($percent%)"
+                            } else "Allow Usage Access to track the limit",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { (percent / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = if (percent >= DataLimit.WARN_PERCENT) netPulseColors.warning else MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "You get an alert at ${DataLimit.WARN_PERCENT}% and when the limit is reached. " +
+                                "Counts mobile data only.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
 
@@ -771,6 +828,100 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearConfirmDialog = false }) {
+                    Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    // Data limit dialog (GB, decimals allowed; empty or 0 turns it off)
+    if (showDataLimitDialog) {
+        var input by remember {
+            mutableStateOf(if (uiState.dataLimitBytes > 0L) DataLimit.formatGb(uiState.dataLimitBytes) else "")
+        }
+        val parsed = input.trim().toDoubleOrNull()
+        val valid = input.isBlank() || (parsed != null && parsed >= 0.0 && parsed <= 10000.0)
+        AlertDialog(
+            onDismissRequest = { showDataLimitDialog = false },
+            title = {
+                Text("Monthly data limit", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter your mobile data plan in GB. Leave empty to turn the limit off.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        label = { Text("Limit (GB)") },
+                        singleLine = true,
+                        isError = !valid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = valid,
+                    onClick = {
+                        onSetDataLimitGb(parsed ?: 0.0)
+                        showDataLimitDialog = false
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDataLimitDialog = false }) {
+                    Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    // Billing cycle day dialog
+    if (showCycleDayDialog) {
+        var input by remember { mutableStateOf(uiState.dataLimitCycleDay.toString()) }
+        val day = input.trim().toIntOrNull()
+        val valid = day != null && day in DataLimit.MIN_CYCLE_DAY..DataLimit.MAX_CYCLE_DAY
+        AlertDialog(
+            onDismissRequest = { showCycleDayDialog = false },
+            title = {
+                Text("Plan renews on day", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Day of the month your data plan resets (1 to ${DataLimit.MAX_CYCLE_DAY}).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it.filter { c -> c.isDigit() }.take(2) },
+                        label = { Text("Day") },
+                        singleLine = true,
+                        isError = !valid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = valid,
+                    onClick = {
+                        onSetDataLimitCycleDay(day ?: 1)
+                        showCycleDayDialog = false
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCycleDayDialog = false }) {
                     Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },

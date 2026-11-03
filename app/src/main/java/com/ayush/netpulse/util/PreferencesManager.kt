@@ -106,6 +106,26 @@ class PreferencesManager(context: Context) {
         get() = prefs.getBoolean(KEY_SHOW_ON_LOCK_SCREEN, false)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_ON_LOCK_SCREEN, value).apply()
 
+    /** Monthly mobile data limit in bytes; 0 means no limit / alerts off. */
+    var dataLimitBytes: Long
+        get() = prefs.getLong(KEY_DATA_LIMIT_BYTES, 0L)
+        set(value) = prefs.edit().putLong(KEY_DATA_LIMIT_BYTES, value).apply()
+
+    /** Day of the month (1-28) on which the data plan renews. */
+    var dataLimitCycleDay: Int
+        get() = prefs.getInt(KEY_DATA_LIMIT_CYCLE_DAY, 1)
+        set(value) = prefs.edit().putInt(KEY_DATA_LIMIT_CYCLE_DAY, value).apply()
+
+    /** Mobile bytes used since the current billing cycle started (refreshed with today's usage). */
+    var cachedCycleMobileBytes: Long
+        get() = prefs.getLong(KEY_CACHED_CYCLE_MOBILE_BYTES, 0L)
+        set(value) = prefs.edit().putLong(KEY_CACHED_CYCLE_MOBILE_BYTES, value).apply()
+
+    /** "cycleStartMillis:level" of the last alert sent, so each alert fires once per cycle. */
+    var dataLimitAlertState: String
+        get() = prefs.getString(KEY_DATA_LIMIT_ALERT_STATE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_DATA_LIMIT_ALERT_STATE, value).apply()
+
     var speedUnitPreference: String
         get() = prefs.getString(KEY_SPEED_UNIT_PREFERENCE, "Auto") ?: "Auto"
         set(value) = prefs.edit().putString(KEY_SPEED_UNIT_PREFERENCE, value).apply()
@@ -157,6 +177,10 @@ class PreferencesManager(context: Context) {
         private const val KEY_LAST_KNOWN_SERVICE_STATE = "key_last_known_service_state"
         private const val KEY_SHOW_SPEED_IN_STATUS_BAR = "key_show_speed_in_status_bar"
         private const val KEY_SHOW_ON_LOCK_SCREEN = "key_show_on_lock_screen"
+        private const val KEY_DATA_LIMIT_BYTES = "key_data_limit_bytes"
+        private const val KEY_DATA_LIMIT_CYCLE_DAY = "key_data_limit_cycle_day"
+        private const val KEY_CACHED_CYCLE_MOBILE_BYTES = "key_cached_cycle_mobile_bytes"
+        private const val KEY_DATA_LIMIT_ALERT_STATE = "key_data_limit_alert_state"
         private const val KEY_SPEED_UNIT_PREFERENCE = "key_speed_unit_preference"
         private const val KEY_NOTIFICATION_STYLE = "key_notification_style"
         private const val KEY_CACHED_TODAY_MOBILE_BYTES = "key_cached_today_mobile_bytes"

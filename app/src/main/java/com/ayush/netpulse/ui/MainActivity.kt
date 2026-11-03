@@ -88,6 +88,8 @@ class MainActivity : ComponentActivity() {
                     onSetLogRetentionDays = { days -> viewModel.setLogRetentionDays(days) },
                     onToggleSpeedInStatusBar = { viewModel.toggleShowSpeedInStatusBar() },
                     onToggleShowOnLockScreen = { viewModel.toggleShowOnLockScreen() },
+                    onSetDataLimitGb = { gb -> viewModel.setDataLimitGb(gb) },
+                    onSetDataLimitCycleDay = { day -> viewModel.setDataLimitCycleDay(day) },
                     onSetSpeedUnit = { unit -> viewModel.setSpeedUnitPreference(unit) },
                     onSetNotificationStyle = { style -> viewModel.setNotificationStylePreference(style) },
                     onSetNotificationRefreshInterval = { interval -> viewModel.setNotificationRefreshInterval(interval) },

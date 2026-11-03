@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">NetPulse</string>
+    <string name="widget_description">Today\'s mobile and Wi-Fi data usage</string>
 </resources>

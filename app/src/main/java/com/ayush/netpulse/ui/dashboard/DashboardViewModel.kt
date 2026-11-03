@@ -16,7 +16,9 @@ import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.repository.NetworkRepository
 import com.ayush.netpulse.service.SpeedTrackerService
 import com.ayush.netpulse.util.NetworkUtils
+import com.ayush.netpulse.util.DataLimit
 import com.ayush.netpulse.util.PreferencesManager
+import com.ayush.netpulse.widget.UsageWidgetProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,6 +98,9 @@ class DashboardViewModel(
             it.copy(
                 showSpeedInStatusBar = preferencesManager.showSpeedInStatusBar,
                 showOnLockScreen = preferencesManager.showOnLockScreen,
+                dataLimitBytes = preferencesManager.dataLimitBytes,
+                dataLimitCycleDay = preferencesManager.dataLimitCycleDay,
+                cycleMobileBytes = preferencesManager.cachedCycleMobileBytes,
                 speedUnitPreference = preferencesManager.speedUnitPreference,
                 notificationStyle = preferencesManager.notificationStyle,
                 appTheme = preferencesManager.appTheme,
@@ -202,6 +207,7 @@ class DashboardViewModel(
                 _uiState.update {
                     it.copy(
                         dailyUsage = usage,
+                        cycleMobileBytes = preferencesManager.cachedCycleMobileBytes,
                         isLoadingUsage = false,
                         usageErrorMessage = null
                     )
@@ -324,6 +330,27 @@ class DashboardViewModel(
         val context = getApplication<Application>().applicationContext
         if (_uiState.value.isBackgroundServiceRunning) {
             SpeedTrackerService.start(context)
+        }
+    }
+
+    /** Sets the monthly mobile data limit in GB; 0 or less turns the limit and its alerts off. */
+    fun setDataLimitGb(gb: Double) {
+        val bytes = if (gb > 0.0) DataLimit.gbToBytes(gb) else 0L
+        preferencesManager.dataLimitBytes = bytes
+        if (bytes == 0L) preferencesManager.cachedCycleMobileBytes = 0L
+        preferencesManager.dataLimitAlertState = "" // new limit: alerts may fire again
+        _uiState.update { it.copy(dataLimitBytes = bytes, cycleMobileBytes = preferencesManager.cachedCycleMobileBytes) }
+        if (bytes > 0L && _uiState.value.hasUsageAccessPermission) loadDailyDataUsage(isSilent = true)
+        UsageWidgetProvider.refresh(getApplication())
+    }
+
+    fun setDataLimitCycleDay(day: Int) {
+        val safeDay = day.coerceIn(DataLimit.MIN_CYCLE_DAY, DataLimit.MAX_CYCLE_DAY)
+        preferencesManager.dataLimitCycleDay = safeDay
+        preferencesManager.dataLimitAlertState = ""
+        _uiState.update { it.copy(dataLimitCycleDay = safeDay) }
+        if (preferencesManager.dataLimitBytes > 0L && _uiState.value.hasUsageAccessPermission) {
+            loadDailyDataUsage(isSilent = true)
         }
     }
 
