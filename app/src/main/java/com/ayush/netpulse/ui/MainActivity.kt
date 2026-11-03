@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
                                         putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                                        putExtra(Settings.EXTRA_CHANNEL_ID, SpeedTrackerService.CHANNEL_ID)
+                                        putExtra(Settings.EXTRA_CHANNEL_ID, SpeedTrackerService.activeChannelId(this@MainActivity))
                                     }
                                     startActivity(intent)
                                 } else {
@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
                     onClearLogs = { viewModel.clearLogs() },
                     onSetLogRetentionDays = { days -> viewModel.setLogRetentionDays(days) },
                     onToggleSpeedInStatusBar = { viewModel.toggleShowSpeedInStatusBar() },
+                    onToggleShowOnLockScreen = { viewModel.toggleShowOnLockScreen() },
                     onSetSpeedUnit = { unit -> viewModel.setSpeedUnitPreference(unit) },
                     onSetNotificationStyle = { style -> viewModel.setNotificationStylePreference(style) },
                     onSetNotificationRefreshInterval = { interval -> viewModel.setNotificationRefreshInterval(interval) },

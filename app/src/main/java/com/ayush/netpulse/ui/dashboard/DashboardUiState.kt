@@ -22,6 +22,7 @@ data class DashboardUiState(
     val isLoadingUsage: Boolean = false,
     val usageErrorMessage: String? = null,
     val showSpeedInStatusBar: Boolean = false,
+    val showOnLockScreen: Boolean = false,
     val speedUnitPreference: String = "Auto",
     val notificationStyle: String = "Minimal",
     val appTheme: String = "Dark",

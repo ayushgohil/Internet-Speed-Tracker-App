@@ -68,6 +68,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onToggleBackgroundMonitoring: () -> Unit,
     onToggleSpeedInStatusBar: () -> Unit,
+    onToggleShowOnLockScreen: () -> Unit,
     onSetSpeedUnit: (String) -> Unit,
     onSetNotificationStyle: (String) -> Unit = {},
     onSetNotificationRefreshInterval: (Long) -> Unit = {},
@@ -191,6 +192,16 @@ fun SettingsScreen(
                     subtitle = "Show live download rate in status bar",
                     checked = uiState.showSpeedInStatusBar,
                     onCheckedChange = { onToggleSpeedInStatusBar() }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+
+                // Show notification details on the lock screen (off by default)
+                PreferenceSwitchRow(
+                    title = "Show on lock screen",
+                    subtitle = "Show live speed and usage while the phone is locked",
+                    checked = uiState.showOnLockScreen,
+                    onCheckedChange = { onToggleShowOnLockScreen() }
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)

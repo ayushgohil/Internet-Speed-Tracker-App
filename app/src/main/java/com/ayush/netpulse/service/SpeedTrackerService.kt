@@ -135,7 +135,7 @@ class SpeedTrackerService : Service() {
             }
             preferencesManager.lastNotificationUpdateTimestamp = System.currentTimeMillis()
             preferencesManager.lastKnownError = null
-            Log.d(TAG, "startForeground completed successfully with channel $CHANNEL_ID")
+            Log.d(TAG, "startForeground completed successfully with channel ${activeChannelId(this)}")
         } catch (e: Exception) {
             Log.e(TAG, "Foreground start exception (${e.javaClass.simpleName}): ${e.message}", e)
             preferencesManager.lastKnownServiceState = "Start Restricted"
@@ -358,7 +358,8 @@ class SpeedTrackerService : Service() {
 
         val isDetailed = (preferencesManager.notificationStyle == "Detailed")
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, activeChannelId(this))
+            .setVisibility(lockScreenVisibility())
             .setContentTitle(speedTitle)
             .setContentText(usageSummary)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -454,7 +455,8 @@ class SpeedTrackerService : Service() {
         val isDetailed = (preferencesManager.notificationStyle == "Detailed")
         val brandColor = if (preferencesManager.appTheme == "Light") 0xFF293D91.toInt() else 0xFF8EA5FF.toInt()
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, activeChannelId(this))
+            .setVisibility(lockScreenVisibility())
             .setContentTitle(speedTitle)
             .setContentText(usageSummary)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -509,6 +511,10 @@ class SpeedTrackerService : Service() {
         return builder.build()
     }
 
+    private fun lockScreenVisibility(): Int =
+        if (preferencesManager.showOnLockScreen) NotificationCompat.VISIBILITY_PUBLIC
+        else NotificationCompat.VISIBILITY_SECRET
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Delete legacy lower-importance channels so OS promotes NetPulse to high/urgent
@@ -526,18 +532,29 @@ class SpeedTrackerService : Service() {
                 }
             }
 
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "NetPulse Speed Monitor",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Real-time internet speed indicator in status bar"
-                setShowBadge(false)
-                enableVibration(false)
-                setSound(null, null)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            try {
+                notificationManager.deleteNotificationChannel(CHANNEL_ID_OLD_V4)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not delete old channel: ${e.message}")
             }
-            notificationManager.createNotificationChannel(channel)
+
+            listOf(
+                CHANNEL_ID_LOCK_VISIBLE to Notification.VISIBILITY_PUBLIC,
+                CHANNEL_ID_LOCK_HIDDEN to Notification.VISIBILITY_SECRET
+            ).forEach { (id, visibility) ->
+                val channel = NotificationChannel(
+                    id,
+                    "NetPulse Speed Monitor",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Real-time internet speed indicator in status bar"
+                    setShowBadge(false)
+                    enableVibration(false)
+                    setSound(null, null)
+                    lockscreenVisibility = visibility
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
         }
     }
 
@@ -582,8 +599,17 @@ class SpeedTrackerService : Service() {
 
     companion object {
         private const val TAG = "SpeedTrackerService"
-        const val CHANNEL_ID = "netpulse_speed_meter_urgent_v4"
+        // Two otherwise identical channels: one visible on the lock screen, one hidden.
+        // A channel's lock-screen visibility can't be changed reliably after creation, so the
+        // "Show on lock screen" setting switches between them.
+        const val CHANNEL_ID_LOCK_VISIBLE = "netpulse_speed_meter_lock_visible_v5"
+        const val CHANNEL_ID_LOCK_HIDDEN = "netpulse_speed_meter_lock_hidden_v5"
+        private const val CHANNEL_ID_OLD_V4 = "netpulse_speed_meter_urgent_v4"
         const val NOTIFICATION_ID = 1001
+
+        fun activeChannelId(context: Context): String =
+            if (PreferencesManager.getInstance(context).showOnLockScreen) CHANNEL_ID_LOCK_VISIBLE
+            else CHANNEL_ID_LOCK_HIDDEN
 
         const val ACTION_START = "com.ayush.netpulse.action.START"
         const val ACTION_STOP = "com.ayush.netpulse.action.STOP"

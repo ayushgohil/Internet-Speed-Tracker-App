@@ -95,6 +95,7 @@ class DashboardViewModel(
         _uiState.update {
             it.copy(
                 showSpeedInStatusBar = preferencesManager.showSpeedInStatusBar,
+                showOnLockScreen = preferencesManager.showOnLockScreen,
                 speedUnitPreference = preferencesManager.speedUnitPreference,
                 notificationStyle = preferencesManager.notificationStyle,
                 appTheme = preferencesManager.appTheme,
@@ -321,6 +322,17 @@ class DashboardViewModel(
         preferencesManager.showSpeedInStatusBar = next
         _uiState.update { it.copy(showSpeedInStatusBar = next) }
         val context = getApplication<Application>().applicationContext
+        if (_uiState.value.isBackgroundServiceRunning) {
+            SpeedTrackerService.start(context)
+        }
+    }
+
+    fun toggleShowOnLockScreen() {
+        val next = !preferencesManager.showOnLockScreen
+        preferencesManager.showOnLockScreen = next
+        _uiState.update { it.copy(showOnLockScreen = next) }
+        val context = getApplication<Application>().applicationContext
+        // Re-post the notification so the new lock-screen setting takes effect straight away.
         if (_uiState.value.isBackgroundServiceRunning) {
             SpeedTrackerService.start(context)
         }

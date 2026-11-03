@@ -101,6 +101,11 @@ class PreferencesManager(context: Context) {
         get() = prefs.getBoolean(KEY_SHOW_SPEED_IN_STATUS_BAR, false)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_SPEED_IN_STATUS_BAR, value).apply()
 
+    /** Whether the live speed notification may show its details on the lock screen. Off by default. */
+    var showOnLockScreen: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_ON_LOCK_SCREEN, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_ON_LOCK_SCREEN, value).apply()
+
     var speedUnitPreference: String
         get() = prefs.getString(KEY_SPEED_UNIT_PREFERENCE, "Auto") ?: "Auto"
         set(value) = prefs.edit().putString(KEY_SPEED_UNIT_PREFERENCE, value).apply()
@@ -151,6 +156,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_SERVICE_RESTART_COUNT = "key_service_restart_count"
         private const val KEY_LAST_KNOWN_SERVICE_STATE = "key_last_known_service_state"
         private const val KEY_SHOW_SPEED_IN_STATUS_BAR = "key_show_speed_in_status_bar"
+        private const val KEY_SHOW_ON_LOCK_SCREEN = "key_show_on_lock_screen"
         private const val KEY_SPEED_UNIT_PREFERENCE = "key_speed_unit_preference"
         private const val KEY_NOTIFICATION_STYLE = "key_notification_style"
         private const val KEY_CACHED_TODAY_MOBILE_BYTES = "key_cached_today_mobile_bytes"
