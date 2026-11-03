@@ -13,7 +13,7 @@ A fast, private, offline-first Android app that shows your real-time download an
 ![Version](https://img.shields.io/badge/Version-1.0.0-blue)
 ![Privacy](https://img.shields.io/badge/Privacy-100%25%20local%20%26%20offline-success)
 
-[Features](#-features) · [How it works](#-how-it-works) · [Get the APK](#-get-the-apk) · [Build from source](#-build-from-source) · [Troubleshooting](#-troubleshooting)
+[Features](#-features) · [Screenshots](#-screenshots) · [How it works](#-how-it-works) · [Get the APK](#-get-the-apk) · [Build from source](#-build-from-source) · [Troubleshooting](#-troubleshooting)
 
 </div>
 
@@ -23,7 +23,7 @@ A fast, private, offline-first Android app that shows your real-time download an
 
 - [Overview](#-overview)
 - [Features](#-features)
-- [Design preview](#-design-preview)
+- [Screenshots](#-screenshots)
 - [How it works](#-how-it-works)
 - [Staying alive in the background](#-staying-alive-in-the-background)
 - [Settings reference](#-settings-reference)
@@ -85,15 +85,60 @@ Everything is computed on your device. There is no account, no server, and no an
 
 ---
 
-## 🖼️ Design preview
+## 📸 Screenshots
 
-The wireframe below is the design reference the interface was built from. The shipped app differs slightly: it has **two tabs (Overview and Usage)**, and Speed Logs and Diagnostics are reached from **Settings**.
+Real screenshots from a Moto G54 5G running Android 15, in both themes. **Overview** shows the live speed and today's usage, **Usage** has the 90-day heatmap and daily table, and **Settings** holds everything else (including Speed Logs and Diagnostics).
+
+### Dark theme (Midnight Blueberry)
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/dark-overview.png" width="220" alt="Overview, dark theme"><br><sub><b>Overview</b></sub></td>
+    <td align="center"><img src="docs/screenshots/dark-usage.png" width="220" alt="Usage heatmap, dark theme"><br><sub><b>Usage</b></sub></td>
+    <td align="center"><img src="docs/screenshots/dark-settings.png" width="220" alt="Settings, dark theme"><br><sub><b>Settings</b></sub></td>
+    <td align="center"><img src="docs/screenshots/dark-about.png" width="220" alt="Settings and About, dark theme"><br><sub><b>Settings (more)</b></sub></td>
+  </tr>
+</table>
+</div>
+
+### Light theme (Blueberry + Cream Soda)
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/light-overview.png" width="220" alt="Overview, light theme"><br><sub><b>Overview</b></sub></td>
+    <td align="center"><img src="docs/screenshots/light-usage.png" width="220" alt="Usage heatmap, light theme"><br><sub><b>Usage</b></sub></td>
+    <td align="center"><img src="docs/screenshots/light-settings.png" width="220" alt="Settings, light theme"><br><sub><b>Settings</b></sub></td>
+    <td align="center"><img src="docs/screenshots/light-about.png" width="220" alt="Settings and About, light theme"><br><sub><b>Settings (more)</b></sub></td>
+  </tr>
+</table>
+</div>
+
+### Live speed in the status bar
+
+The speed icon sits next to the clock and updates every second: the number is the current download speed, with its unit underneath.
+
+<div align="center">
+
+![Status bar with the NetPulse speed icon](docs/screenshots/status-bar.png)
+
+</div>
+
+<details>
+<summary><b>Original design wireframe</b></summary>
+
+<br>
+
+The wireframe the interface was designed from. The shipped app differs slightly: it has **two tabs (Overview and Usage)**, and Speed Logs and Diagnostics are reached from **Settings**.
 
 <div align="center">
 
 ![NetPulse design wireframe](app/src/ui-images/NetPulse%20Dark%20Theme%20UI%20Wireframe.png)
 
 </div>
+
+</details>
 
 ---
 
@@ -208,7 +253,8 @@ Keeping a monitor running all night is the hardest part of an app like this, bec
 
 ```text
 .
-├── .github/workflows/build-apk.yml     # Builds the debug APK on every push
+├── .github/workflows/build-apk.yml     # Builds the APKs on every push and publishes the latest release
+├── docs/screenshots/                   # Screenshots shown in this README
 ├── app/
 │   ├── debug.keystore                  # Shared DEBUG signing key (debug builds only)
 │   ├── build.gradle.kts
@@ -245,12 +291,23 @@ Keeping a monitor running all night is the hardest part of an app like this, bec
 
 ## 📲 Get the APK
 
-You do **not** need Android Studio to get an installable app. GitHub builds it for you on every push.
+You do **not** need Android Studio to get an installable app. GitHub builds it for you on every push and publishes it as a plain `.apk` file (no zip to unpack).
+
+**Quickest way:** on your phone, open this link while signed in to GitHub, then open the downloaded file and install (allow *Install unknown apps* if asked):
+
+> **[⬇️ NetPulse.apk](https://github.com/ayushgohil/Internet-Speed-Tracker-App/releases/latest/download/NetPulse.apk)** (optimised build, recommended)
+
+The **[latest release](https://github.com/ayushgohil/Internet-Speed-Tracker-App/releases/tag/latest)** page also has `NetPulse-debug.apk`, the slower debug build.
+
+<details>
+<summary><b>Alternative: download from the Actions tab</b></summary>
 
 1. Open the repository's **[Actions](https://github.com/ayushgohil/Internet-Speed-Tracker-App/actions)** tab.
 2. Click the latest **Build debug APK** run (a green ✓ means the build worked).
-3. Scroll to the **Artifacts** section at the bottom and download **`app-debug`**.
-4. Unzip it, copy `app-debug.apk` to your phone and open it (allow *Install unknown apps* if asked).
+3. Scroll to the **Artifacts** section at the bottom and download **`app-release`** (optimised) or **`app-debug`**.
+4. Unzip it, copy the `.apk` to your phone and open it.
+
+</details>
 
 Builds are signed with one shared debug key, so each new APK **installs over the previous one and keeps your data**. If you previously installed a build signed with a different key, uninstall it once first.
 
@@ -287,11 +344,14 @@ The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 The workflow in [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml) runs on every push and can also be started manually from the Actions tab (**Run workflow**). It:
 
 1. Checks out the code and sets up JDK 17 and Gradle with caching.
-2. Builds the debug APK with `./gradlew assembleDebug`.
-3. Prints the APK's signing certificate, as a check that every build uses the same key.
-4. Uploads `app-debug.apk` as the **`app-debug`** artifact, kept for 30 days.
+2. Builds the debug and the optimised (R8-shrunk) release APK with `./gradlew assembleDebug assembleRelease`.
+3. Prints each APK's details (package, version, signature) so every build can be checked in the log.
+4. Uploads both APKs as the **`app-debug`** and **`app-release`** artifacts, kept for 30 days.
+5. On `main`, publishes them as plain files, `NetPulse.apk` and `NetPulse-debug.apk`, on a release named **latest** (see [Get the APK](#-get-the-apk)).
 
-> 🔑 **About the committed keystore:** `app/debug.keystore` is a **debug-only** key, committed on purpose so that every build shares a signature. Never use it to sign a release or Play Store build, and keep the repository private.
+Two manual-only workflows help diagnose install problems: **Install test** (installs both APKs on an Android 15 emulator and prints the results) and **Build test-package APK** (builds the app under a different package name so it installs side by side with the normal one).
+
+> 🔑 **About the committed keystore:** `app/debug.keystore` is a **debug-only** key, committed on purpose so that every build shares a signature. It also signs the release build so that build can be tested on a phone. Never use it for the Play Store, and keep the repository private.
 
 ---
 
