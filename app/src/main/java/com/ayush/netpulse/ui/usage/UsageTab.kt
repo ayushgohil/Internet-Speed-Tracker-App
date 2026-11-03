@@ -59,6 +59,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -495,10 +497,15 @@ private fun CalendarHeatmapCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 9.sp,
+                                // The label is wider than one 13dp week column, so let it overflow
+                                // sideways instead of clipping ("Nov" was showing as "No").
                                 modifier = Modifier
                                     .height(14.dp)
-                                    .width(13.dp),
-                                maxLines = 1
+                                    .width(13.dp)
+                                    .wrapContentWidth(align = Alignment.Start, unbounded = true),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Visible
                             )
 
                             // 7 days of the week

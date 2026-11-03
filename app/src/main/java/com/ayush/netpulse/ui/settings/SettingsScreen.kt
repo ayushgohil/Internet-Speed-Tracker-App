@@ -1,6 +1,15 @@
 package com.ayush.netpulse.ui.settings
 
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -337,6 +346,40 @@ fun SettingsScreen(
                             onRequest = onRequestBatteryOptimization
                         )
                     }
+                }
+
+                // Exact alarms (Android 12+): lets the app restart itself quickly after being killed
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val context = LocalContext.current
+                    var exactAlarmsAllowed by remember {
+                        mutableStateOf(canScheduleExactAlarms(context))
+                    }
+                    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                        exactAlarmsAllowed = canScheduleExactAlarms(context)
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
+                    PreferenceClickableRow(
+                        title = "Reliable restarts (exact alarms)",
+                        value = if (exactAlarmsAllowed) "Allowed" else "Tap to allow",
+                        valueColor = if (exactAlarmsAllowed) MaterialTheme.colorScheme.primary
+                        else netPulseColors.warning,
+                        onClick = {
+                            try {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                )
+                            } catch (e: Exception) {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                )
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -1012,6 +1055,11 @@ private fun PreferenceClickableRow(
         }
     }
 }
+
+private fun canScheduleExactAlarms(context: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        (context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager)?.canScheduleExactAlarms() == true
+    } else true
 
 @Composable
 private fun PermissionActionRow(

@@ -12,8 +12,11 @@ android {
         applicationId = "com.ayush.netpulse"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI passes its run number, so every GitHub build gets a higher versionCode and the installed
+        // version is easy to tell apart. Local builds fall back to 1.
+        val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = buildNumber
+        versionName = "1.0.$buildNumber"
 
         // Optional, for diagnosing install problems: -PappIdSuffix=.test builds the app under a
         // different package name so it installs side by side with the normal app.
