@@ -10,30 +10,41 @@ import androidx.core.graphics.drawable.IconCompat
 import kotlin.math.roundToInt
 
 /**
- * Generates a large, legible two-row monochrome status bar speed icon
- * (number on top, unit on bottom).
+ * Generates a tall, slim, easy-to-read two-row monochrome status bar speed icon
+ * (number on top, unit below).
  *
- * The status bar shrinks this bitmap to roughly 24dp, so the artwork uses the whole canvas:
- * - A condensed bold font lets the digits grow tall while still fitting the narrow icon width.
- * - Text sizes are fitted to the available box instead of using fixed sizes, so single, double
- *   and triple digit speeds all fill the icon as much as possible without clipping.
+ * The status bar shrinks this bitmap to roughly 37 px, so the artwork uses the whole canvas and is
+ * laid out like the classic speed meters:
+ * - Digits take about 54% of the height, a small gap about 8%, and the unit about 38%.
+ * - Text is sized by HEIGHT first. It is then squeezed horizontally (textScaleX) so that even a
+ *   three digit speed fits the width. This gives tall, slim digits on every phone, instead of
+ *   depending on whether the phone's font happens to be narrow.
+ * - No fake-bold: it made the digits look bulky once scaled down.
+ * - 1, 2 and 3 digit speeds all use the same text height, so the icon never changes size.
  * - Purely numeric values: never displays decimals like "0.2K" for sub-KB traffic.
- * - Cached bitmap and text sizes so nothing is recomputed when the speed text is unchanged.
+ * - Cached bitmap and text styles so nothing is recomputed when the speed text is unchanged.
  */
 object SpeedIconGenerator {
 
     private const val BITMAP_SIZE = 96 // 96x96 px for sharp rendering on high-DPI displays
     private const val SIDE_PADDING = 4f
-    private const val MAX_NUMBER_HEIGHT = 58f // digits take ~60% of the icon height
-    private const val MAX_UNIT_HEIGHT = 28f   // unit row ("KB/s" / "MB/s")
-    private const val ROW_GAP = 3f
-    private const val START_TEXT_SIZE = 120f
-    private const val MIN_TEXT_SIZE = 16f
 
-    // Condensed bold fits taller digits into the same width; falls back to normal bold if missing.
-    private val condensedBold: Typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+    // Row heights on the 96 px canvas (52 + 8 + 34 = 94, leaving a 1 px margin top and bottom).
+    private const val NUMBER_HEIGHT = 52f
+    private const val UNIT_HEIGHT = 34f
+    private const val ROW_GAP = 8f
 
-    private val textSizeCache = HashMap<String, Float>()
+    private const val NUMBER_SCALE_X = 0.72f // slim digits
+    private const val MIN_SCALE_X = 0.40f
+    private const val START_TEXT_SIZE = 140f
+    private const val MIN_TEXT_SIZE = 12f
+    private const val SIZE_STEP = 0.5f
+
+    private val boldTypeface: Typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+
+    private data class RowStyle(val textSize: Float, val scaleX: Float)
+
+    private val styleCache = HashMap<String, RowStyle>()
     private var lastFormattedText: String = ""
     private var lastCachedIcon: IconCompat? = null
 
@@ -83,22 +94,37 @@ object SpeedIconGenerator {
         color = Color.WHITE
         isAntiAlias = true
         isSubpixelText = true
-        typeface = condensedBold
-        isFakeBoldText = true // Extra bold and punchy for maximum status bar visibility
+        typeface = boldTypeface
         textAlign = Paint.Align.CENTER
     }
 
-    /** Largest text size (px) whose bounds for [sample] fit inside [maxWidth] x [maxHeight]. */
-    private fun fitTextSize(paint: Paint, sample: String, maxWidth: Float, maxHeight: Float): Float {
+    /**
+     * Finds the text size whose bounds for [sample] are as tall as [targetHeight] (so the row gets
+     * the height we want whatever the phone's font is), then the horizontal squeeze needed so the
+     * row also fits in [maxWidth]. Width is measured unsqueezed and scaled linearly, so this does
+     * not depend on how a given Android version reports bounds for a scaled paint.
+     */
+    private fun fitRow(sample: String, targetHeight: Float, baseScaleX: Float, maxWidth: Float): RowStyle {
+        val paint = newTextPaint()
         val bounds = Rect()
+
         var size = START_TEXT_SIZE
         while (size > MIN_TEXT_SIZE) {
             paint.textSize = size
             paint.getTextBounds(sample, 0, sample.length, bounds)
-            if (bounds.width() <= maxWidth && bounds.height() <= maxHeight) break
-            size -= 1f
+            if (bounds.height() <= targetHeight) break
+            size -= SIZE_STEP
         }
-        return size
+        paint.textSize = size
+        paint.getTextBounds(sample, 0, sample.length, bounds)
+
+        val naturalWidth = bounds.width().toFloat()
+        val scaleX = if (naturalWidth > 0f) {
+            minOf(baseScaleX, maxWidth / naturalWidth).coerceAtLeast(MIN_SCALE_X)
+        } else {
+            baseScaleX
+        }
+        return RowStyle(size, scaleX)
     }
 
     /**
@@ -119,17 +145,23 @@ object SpeedIconGenerator {
             val canvas = Canvas(bitmap)
             val maxWidth = BITMAP_SIZE - 2 * SIDE_PADDING
 
-            val numberPaint = newTextPaint()
-            val unitPaint = newTextPaint()
-
-            // Digits share the same width and height, so sizing and positioning with zeros of the
+            // Digits all have the same height and width, so sizing and positioning with zeros of the
             // same length keeps the layout stable no matter which digits are shown.
             val numberSample = "0".repeat(comp.value.length)
-            numberPaint.textSize = textSizeCache.getOrPut("number${comp.value.length}") {
-                fitTextSize(numberPaint, numberSample, maxWidth, MAX_NUMBER_HEIGHT)
+            val numberStyle = styleCache.getOrPut("number${comp.value.length}") {
+                fitRow(numberSample, NUMBER_HEIGHT, NUMBER_SCALE_X, maxWidth)
             }
-            unitPaint.textSize = textSizeCache.getOrPut("unit${comp.unit}") {
-                fitTextSize(unitPaint, comp.unit, maxWidth, MAX_UNIT_HEIGHT)
+            val unitStyle = styleCache.getOrPut("unit${comp.unit}") {
+                fitRow(comp.unit, UNIT_HEIGHT, 1f, maxWidth)
+            }
+
+            val numberPaint = newTextPaint().apply {
+                textSize = numberStyle.textSize
+                textScaleX = numberStyle.scaleX
+            }
+            val unitPaint = newTextPaint().apply {
+                textSize = unitStyle.textSize
+                textScaleX = unitStyle.scaleX
             }
 
             val numBounds = Rect()
@@ -164,6 +196,7 @@ object SpeedIconGenerator {
      */
     @Synchronized
     fun clearCache() {
+        styleCache.clear()
         lastFormattedText = ""
         lastCachedIcon = null
     }
