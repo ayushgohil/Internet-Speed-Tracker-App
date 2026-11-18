@@ -194,7 +194,7 @@ class SpeedTrackerService : Service() {
                     val speed = if (isOffline) {
                         LiveSpeed(0L, 0L, now)
                     } else {
-                        repository.sampleCurrentSpeed()
+                        repository.sampleCurrentSpeed(currentNetworkType)
                     }
                     _liveSpeedState.value = speed
 
