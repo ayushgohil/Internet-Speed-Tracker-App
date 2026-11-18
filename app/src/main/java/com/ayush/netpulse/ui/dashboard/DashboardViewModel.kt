@@ -283,8 +283,8 @@ class DashboardViewModel(
 
         localMonitoringJob = viewModelScope.launch {
             while (isActive) {
-                val rawSpeed = repository.sampleCurrentSpeed()
                 val netType = _uiState.value.networkType
+                val rawSpeed = repository.sampleCurrentSpeed(netType)
                 val smoothed = speedSmoother.smooth(rawSpeed, netType)
                 _uiState.update { it.copy(liveSpeed = smoothed) }
                 preferencesManager.lastSpeedSampleTimestamp = System.currentTimeMillis()
