@@ -286,7 +286,7 @@ class SpeedTrackerService : Service() {
                         } else {
                             // Screen locked/off: only log substantial active downloads (> 50 KB/s)
                             if (rawSpeed.downloadBytesPerSec > 51200 || rawSpeed.uploadBytesPerSec > 51200) {
-                                repository.saveSpeedRecord(speed, currentNetworkType)
+                                repository.saveSpeedRecord(rawSpeed, currentNetworkType)
                                 tickCount = 0
                             }
                         }
