@@ -242,7 +242,7 @@ class SpeedTrackerService : Service() {
                     val currentStyle = preferencesManager.notificationStyle
                     val cachedMobile = preferencesManager.cachedTodayMobileBytes
                     val cachedWifi = preferencesManager.cachedTodayWifiBytes
-                    val signature = "${displaySpeed.formattedDownload}|${displaySpeed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
+                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
                     val timeSinceLastNotif = now - lastNotificationUpdateTime
 
                     val configuredInterval = preferencesManager.notificationRefreshIntervalMs
@@ -363,7 +363,7 @@ class SpeedTrackerService : Service() {
         val wifiBytes = if (isSameDay) preferencesManager.cachedTodayWifiBytes else 0L
         val totalBytes = mobileBytes + wifiBytes
 
-        val speedTitle = "↓ ${displaySpeed.formattedDownload}    ↑ ${displaySpeed.formattedUpload}"
+        val speedTitle = "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
         val usageSummary = if (hasUsagePermission) {
             "Mobile: ${NetworkUtils.formatBytes(mobileBytes)}    Wi-Fi: ${NetworkUtils.formatBytes(wifiBytes)}"
         } else {
@@ -458,7 +458,7 @@ class SpeedTrackerService : Service() {
         val totalBytes = mobileBytes + wifiBytes
 
         // Row 1: ↓ 1.5 MB/s    ↑ 128 KB/s
-        val speedTitle = "↓ ${displaySpeed.formattedDownload}    ↑ ${displaySpeed.formattedUpload}"
+        val speedTitle = "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
 
         // Row 2: Mobile: 620 MB    Wi-Fi: 1.20 GB
         val usageSummary = if (hasUsagePermission) {
@@ -513,7 +513,7 @@ class SpeedTrackerService : Service() {
         }
 
         if (preferencesManager.showSpeedInStatusBar) {
-            val speedIcon = SpeedIconGenerator.createSpeedIcon(rawSpeed.downloadBytesPerSec)
+            val speedIcon = SpeedIconGenerator.createSpeedIcon(speed.downloadBytesPerSec)
             if (speedIcon != null) {
                 builder.setSmallIcon(speedIcon)
             } else {
