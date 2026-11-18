@@ -242,7 +242,7 @@ class SpeedTrackerService : Service() {
                     val currentStyle = preferencesManager.notificationStyle
                     val cachedMobile = preferencesManager.cachedTodayMobileBytes
                     val cachedWifi = preferencesManager.cachedTodayWifiBytes
-                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
+                    val signature = "${displaySpeed.formattedDownload}|${displaySpeed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
                     val timeSinceLastNotif = now - lastNotificationUpdateTime
 
                     val configuredInterval = preferencesManager.notificationRefreshIntervalMs
