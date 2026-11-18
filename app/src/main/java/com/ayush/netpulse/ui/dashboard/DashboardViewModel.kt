@@ -46,10 +46,10 @@ class DashboardViewModel(
         viewModelScope.launch {
             repository.observeNetworkType().collect { netType ->
                 _uiState.update { it.copy(networkType = netType) }
-                // Notify smoother of network switch to prevent stale values across transports
-                val currentRaw = _uiState.value.liveSpeed
-                val smoothed = speedSmoother.smooth(currentRaw, netType)
-                _uiState.update { it.copy(liveSpeed = smoothed) }
+                // Clear the displayed value on transport changes; the active sampler
+                // will publish fresh readings for the new network.
+                speedSmoother.reset()
+                _uiState.update { it.copy(liveSpeed = LiveSpeed(0L, 0L)) }
             }
         }
 
@@ -80,12 +80,10 @@ class DashboardViewModel(
             }
         }
 
-        // Observe speed from authoritative liveSpeedState (piped through SpeedSmoother)
+        // The service publishes the already-smoothed display value. Do not smooth it again.
         viewModelScope.launch {
-            SpeedTrackerService.liveSpeedState.collect { rawSpeed ->
-                val netType = _uiState.value.networkType
-                val smoothed = speedSmoother.smooth(rawSpeed, netType)
-                _uiState.update { it.copy(liveSpeed = smoothed) }
+            SpeedTrackerService.liveSpeedState.collect { displaySpeed ->
+                _uiState.update { it.copy(liveSpeed = displaySpeed) }
                 preferencesManager.lastDisplayedSpeedTimestamp = System.currentTimeMillis()
             }
         }
