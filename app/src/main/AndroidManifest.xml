@@ -62,7 +62,7 @@
                 android:resource="@xml/usage_widget_info" />
         </receiver>
 
-        <!-- Device Reboot Receiver -->
+        <!-- Single owner for device reboot and app-update recovery -->
         <receiver
             android:name=".service.BootReceiver"
             android:enabled="true"
@@ -73,15 +73,13 @@
             </intent-filter>
         </receiver>
 
-        <!-- Keep-Alive & Auto-Revival Receiver -->
+        <!-- Alarm, unlock, and system-held network callback recovery -->
         <receiver
             android:name=".service.ServiceRestartReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.ayush.netpulse.action.RESTART_SERVICE" />
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.USER_PRESENT" />
                 <!-- Fired by the system-held network callback (ServiceRevival); the old CONNECTIVITY_CHANGE
                      broadcast is never delivered to manifest receivers on Android 7+. -->
