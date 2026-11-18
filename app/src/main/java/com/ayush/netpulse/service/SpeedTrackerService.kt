@@ -166,11 +166,20 @@ class SpeedTrackerService : Service() {
         networkObserverJob = serviceScope.launch {
             try {
                 repository.observeNetworkType().collect { netType ->
+                    val networkChanged = currentNetworkType != netType
                     currentNetworkType = netType
                     _activeNetworkTypeState.value = netType
-                    // When network switches (e.g. Wi-Fi <-> Mobile or Disconnected), immediately update notification
-                    val speed = if (netType == NetworkType.DISCONNECTED) LiveSpeed(0L, 0L) else _liveSpeedState.value
-                    updateNotificationSafely(speed, netType)
+                    // Clear old-transport readings immediately; the next sample starts fresh.
+                    if (networkChanged) {
+                        speedSmoother.reset()
+                        _liveSpeedState.value = LiveSpeed(0L, 0L)
+                    }
+                    val displaySpeed = if (netType == NetworkType.DISCONNECTED || networkChanged) {
+                        LiveSpeed(0L, 0L)
+                    } else {
+                        _liveSpeedState.value
+                    }
+                    updateNotificationSafely(displaySpeed, netType)
                 }
             } catch (e: Exception) {
                 if (e !is CancellationException) {
@@ -270,7 +279,7 @@ class SpeedTrackerService : Service() {
                             } else {
                                 wasLastSavedSpeedZero = false
                                 if (rawSpeed.downloadBytesPerSec > 10240 || rawSpeed.uploadBytesPerSec > 10240 || tickCount >= 10) {
-                                    repository.saveSpeedRecord(speed, currentNetworkType)
+                                    repository.saveSpeedRecord(rawSpeed, currentNetworkType)
                                     tickCount = 0
                                 }
                             }
