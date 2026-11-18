@@ -89,7 +89,7 @@ Everything is computed on your device. There is no account, no server, and no an
 
 Real screenshots from a Moto G54 5G running Android 15, in both themes. **Overview** shows the live speed and today's usage, **Usage** has the 90-day heatmap and daily table, and **Settings** holds everything else (including Speed Logs and Diagnostics).
 
-### Dark theme (Midnight Blueberry)
+### Dark theme
 
 <div align="center">
 <table>
@@ -102,7 +102,7 @@ Real screenshots from a Moto G54 5G running Android 15, in both themes. **Overvi
 </table>
 </div>
 
-### Light theme (Blueberry + Cream Soda)
+### Light theme
 
 <div align="center">
 <table>
