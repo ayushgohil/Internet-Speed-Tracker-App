@@ -1,19 +1,14 @@
 package com.ayush.netpulse.service
 
-import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
-import androidx.core.content.ContextCompat
 import com.ayush.netpulse.util.PreferencesManager
 
 /**
- * High-resilience broadcast receiver that automatically revives SpeedTrackerService
- * when the app task is removed, after device reboot/update, on user screen unlock,
- * or when network connectivity transitions occur.
+ * Revives SpeedTrackerService after restart alarms, screen unlock, or network transitions.
+ * Boot and app-update recovery are owned exclusively by BootReceiver.
  */
 class ServiceRestartReceiver : BroadcastReceiver() {
 
@@ -27,18 +22,8 @@ class ServiceRestartReceiver : BroadcastReceiver() {
             return
         }
 
-        // On Android 13+ (API 33+), ensure notification permission is granted before starting FGS
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val hasNotif = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!hasNotif) {
-                Log.w(TAG, "Cannot start SpeedTrackerService: Notification permission not granted")
-                return
-            }
-        }
-
+        // POST_NOTIFICATIONS controls notification-drawer visibility on Android 13+;
+        // it is not a prerequisite for starting a foreground service.
         if (!SpeedTrackerService.isServiceRunningState.value) {
             Log.i(TAG, "Reviving SpeedTrackerService from action: $action")
             val source = when (action) {

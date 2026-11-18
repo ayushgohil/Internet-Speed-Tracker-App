@@ -24,6 +24,7 @@ import com.ayush.netpulse.ui.MainActivity
 import com.ayush.netpulse.util.NetworkUtils
 import com.ayush.netpulse.util.PreferencesManager
 import com.ayush.netpulse.util.SpeedIconGenerator
+import com.ayush.netpulse.util.SpeedSmoother
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,7 @@ class SpeedTrackerService : Service() {
     private var trackerJob: Job? = null
     private var networkObserverJob: Job? = null
     private var currentNetworkType: NetworkType = NetworkType.DISCONNECTED
+    private val speedSmoother = SpeedSmoother()
     private var isExplicitUserStop: Boolean = false
     // Set when Android refused to start us in the foreground; a backoff retry is already scheduled.
     private var startBlockedByOs: Boolean = false
@@ -113,6 +115,8 @@ class SpeedTrackerService : Service() {
 
     private fun startForegroundMonitoring(source: String) {
         startBlockedByOs = false
+        speedSmoother.reset()
+        _liveSpeedState.value = LiveSpeed(0L, 0L)
         preferencesManager.isBackgroundMonitoringEnabled = true
         preferencesManager.lastServiceStartTimestamp = System.currentTimeMillis()
         preferencesManager.lastKnownServiceState = "Active"
@@ -164,11 +168,20 @@ class SpeedTrackerService : Service() {
         networkObserverJob = serviceScope.launch {
             try {
                 repository.observeNetworkType().collect { netType ->
+                    val networkChanged = currentNetworkType != netType
                     currentNetworkType = netType
                     _activeNetworkTypeState.value = netType
-                    // When network switches (e.g. Wi-Fi <-> Mobile or Disconnected), immediately update notification
-                    val speed = if (netType == NetworkType.DISCONNECTED) LiveSpeed(0L, 0L) else _liveSpeedState.value
-                    updateNotificationSafely(speed, netType)
+                    // Clear old-transport readings immediately; the next sample starts fresh.
+                    if (networkChanged) {
+                        speedSmoother.reset()
+                        _liveSpeedState.value = LiveSpeed(0L, 0L)
+                    }
+                    val displaySpeed = if (netType == NetworkType.DISCONNECTED || networkChanged) {
+                        LiveSpeed(0L, 0L)
+                    } else {
+                        _liveSpeedState.value
+                    }
+                    updateNotificationSafely(displaySpeed, netType)
                 }
             } catch (e: Exception) {
                 if (e !is CancellationException) {
@@ -191,15 +204,16 @@ class SpeedTrackerService : Service() {
                     val isOffline = (currentNetworkType == NetworkType.DISCONNECTED)
                     val now = loopIterationStart
 
-                    val speed = if (isOffline) {
+                    val rawSpeed = if (isOffline) {
                         LiveSpeed(0L, 0L, now)
                     } else {
-                        repository.sampleCurrentSpeed()
+                        repository.sampleCurrentSpeed(currentNetworkType)
                     }
-                    _liveSpeedState.value = speed
+                    val displaySpeed = speedSmoother.smooth(rawSpeed, currentNetworkType)
+                    _liveSpeedState.value = displaySpeed
 
                     // Throttled SharedPreferences persistence: Avoid writing to flash memory every 1-2.5s all night
-                    if (now - lastPrefsWriteTimestamp >= 30000L || (!isOffline && (speed.downloadBytesPerSec > 0 || speed.uploadBytesPerSec > 0))) {
+                    if (now - lastPrefsWriteTimestamp >= 30000L || (!isOffline && (rawSpeed.downloadBytesPerSec > 0 || rawSpeed.uploadBytesPerSec > 0))) {
                         preferencesManager.lastSpeedSampleTimestamp = now
                         lastPrefsWriteTimestamp = now
                     }
@@ -221,14 +235,14 @@ class SpeedTrackerService : Service() {
                     // Target exactly 1000ms interval when device screen is interactive,
                     // preserving lower-frequency updates when screen is locked or idle to save battery.
                     val compactSpeed = if (preferencesManager.showSpeedInStatusBar) {
-                        SpeedIconGenerator.formatCompactSpeed(speed.downloadBytesPerSec)
+                        SpeedIconGenerator.formatCompactSpeed(displaySpeed.downloadBytesPerSec)
                     } else {
                         "standard"
                     }
                     val currentStyle = preferencesManager.notificationStyle
                     val cachedMobile = preferencesManager.cachedTodayMobileBytes
                     val cachedWifi = preferencesManager.cachedTodayWifiBytes
-                    val signature = "${speed.formattedDownload}|${speed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
+                    val signature = "${displaySpeed.formattedDownload}|${displaySpeed.formattedUpload}|${currentNetworkType.name}|$compactSpeed|${preferencesManager.showSpeedInStatusBar}|$currentStyle|$cachedMobile|$cachedWifi"
                     val timeSinceLastNotif = now - lastNotificationUpdateTime
 
                     val configuredInterval = preferencesManager.notificationRefreshIntervalMs
@@ -247,12 +261,12 @@ class SpeedTrackerService : Service() {
                         lastNotifiedNetworkType = currentNetworkType
                         lastNotificationUpdateTime = now
                         if (BuildConfig.DEBUG && tickCount % 5 == 0) {
-                            Log.d(TAG, "Speed sample: rawDown=${speed.downloadBytesPerSec}B/s, rawUp=${speed.uploadBytesPerSec}B/s, iconText=$compactSpeed, style=$currentStyle")
+                            Log.d(TAG, "Speed sample: rawDown=${rawSpeed.downloadBytesPerSec}B/s, rawUp=${rawSpeed.uploadBytesPerSec}B/s, displayDown=${displaySpeed.downloadBytesPerSec}B/s, iconText=$compactSpeed, style=$currentStyle")
                         }
-                        updateNotificationSafely(speed, currentNetworkType)
+                        updateNotificationSafely(displaySpeed, currentNetworkType)
                     }
 
-                    val isZeroSpeed = speed.downloadBytesPerSec == 0L && speed.uploadBytesPerSec == 0L
+                    val isZeroSpeed = rawSpeed.downloadBytesPerSec == 0L && rawSpeed.uploadBytesPerSec == 0L
 
                     // Battery & storage efficiency:
                     // Never write to Room database when offline or during zero-traffic idle
@@ -260,21 +274,21 @@ class SpeedTrackerService : Service() {
                         if (isScreenInteractive) {
                             if (isZeroSpeed) {
                                 if (!wasLastSavedSpeedZero) {
-                                    repository.saveSpeedRecord(speed, currentNetworkType)
+                                    repository.saveSpeedRecord(rawSpeed, currentNetworkType)
                                     wasLastSavedSpeedZero = true
                                     tickCount = 0
                                 }
                             } else {
                                 wasLastSavedSpeedZero = false
-                                if (speed.downloadBytesPerSec > 10240 || speed.uploadBytesPerSec > 10240 || tickCount >= 10) {
-                                    repository.saveSpeedRecord(speed, currentNetworkType)
+                                if (rawSpeed.downloadBytesPerSec > 10240 || rawSpeed.uploadBytesPerSec > 10240 || tickCount >= 10) {
+                                    repository.saveSpeedRecord(rawSpeed, currentNetworkType)
                                     tickCount = 0
                                 }
                             }
                         } else {
                             // Screen locked/off: only log substantial active downloads (> 50 KB/s)
-                            if (speed.downloadBytesPerSec > 51200 || speed.uploadBytesPerSec > 51200) {
-                                repository.saveSpeedRecord(speed, currentNetworkType)
+                            if (rawSpeed.downloadBytesPerSec > 51200 || rawSpeed.uploadBytesPerSec > 51200) {
+                                repository.saveSpeedRecord(rawSpeed, currentNetworkType)
                                 tickCount = 0
                             }
                         }
@@ -403,6 +417,7 @@ class SpeedTrackerService : Service() {
         preferencesManager.lastKnownServiceState = "Stopped"
         _isServiceRunningState.value = false
         _liveSpeedState.value = LiveSpeed(0L, 0L)
+        speedSmoother.reset()
 
         trackerJob?.cancel()
         networkObserverJob?.cancel()

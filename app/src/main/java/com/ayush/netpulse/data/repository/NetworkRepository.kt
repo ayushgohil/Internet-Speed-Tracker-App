@@ -7,6 +7,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.TrafficStats
+import android.os.SystemClock
 import android.util.Log
 import com.ayush.netpulse.data.local.DailyUsageDao
 import com.ayush.netpulse.data.local.DailyUsageEntity
@@ -17,6 +18,7 @@ import com.ayush.netpulse.data.model.LiveSpeed
 import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.util.NetworkUtils
 import com.ayush.netpulse.util.PreferencesManager
+import com.ayush.netpulse.util.SpeedSampler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -36,67 +38,41 @@ class NetworkRepository(
     private val networkStatsManager =
         context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
 
-    private var lastRxBytes: Long = -1L
-    private var lastTxBytes: Long = -1L
-    private var lastTimestamp: Long = -1L
+    private val speedSampler = SpeedSampler()
+    private var lastSampledNetworkType: NetworkType? = null
 
     /**
-     * Samples live speed using TrafficStats deltas.
-     * Synchronized to guarantee consistency across concurrent invocations.
-     * Correctly handles TrafficStats.UNSUPPORTED, elapsed time anomalies, and counter wrap/resets.
+     * Samples live speed using cumulative TrafficStats counters.
+     * Monotonic elapsed time is used for rate calculations; wall-clock time is
+     * retained only for the LiveSpeed timestamp displayed and stored by the app.
      */
     @Synchronized
-    fun sampleCurrentSpeed(): LiveSpeed {
+    fun sampleCurrentSpeed(networkType: NetworkType? = null): LiveSpeed {
+        if (networkType != null) {
+            if (lastSampledNetworkType != null && lastSampledNetworkType != networkType) {
+                speedSampler.reset()
+            }
+            lastSampledNetworkType = networkType
+        }
+
         val currentRx = TrafficStats.getTotalRxBytes()
         val currentTx = TrafficStats.getTotalTxBytes()
-        val currentTime = System.currentTimeMillis()
 
-        if (currentRx == TrafficStats.UNSUPPORTED.toLong() || currentTx == TrafficStats.UNSUPPORTED.toLong()) {
-            return LiveSpeed(0L, 0L, currentTime)
-        }
-
-        if (lastRxBytes < 0 || lastTxBytes < 0 || lastTimestamp < 0) {
-            lastRxBytes = currentRx
-            lastTxBytes = currentTx
-            lastTimestamp = currentTime
-            return LiveSpeed(0L, 0L, currentTime)
-        }
-
-        // Handle counter reset or reboot (current count lower than baseline)
-        if (currentRx < lastRxBytes || currentTx < lastTxBytes) {
-            lastRxBytes = currentRx
-            lastTxBytes = currentTx
-            lastTimestamp = currentTime
-            return LiveSpeed(0L, 0L, currentTime)
-        }
-
-        val elapsedMillis = currentTime - lastTimestamp
-        if (elapsedMillis <= 50) { // Discard micro-intervals (<50ms) to avoid division distortion
-            return LiveSpeed(0L, 0L, currentTime)
-        }
-
-        val elapsedSeconds = elapsedMillis / 1000.0
-        val rxDelta = (currentRx - lastRxBytes).coerceAtLeast(0L)
-        val txDelta = (currentTx - lastTxBytes).coerceAtLeast(0L)
-
-        val downBps = (rxDelta / elapsedSeconds).toLong()
-        val upBps = (txDelta / elapsedSeconds).toLong()
-
-        lastRxBytes = currentRx
-        lastTxBytes = currentTx
-        lastTimestamp = currentTime
-
-        return LiveSpeed(downBps, upBps, currentTime)
+        return speedSampler.sample(
+            currentRxBytes = currentRx,
+            currentTxBytes = currentTx,
+            elapsedRealtimeMillis = SystemClock.elapsedRealtime(),
+            wallClockMillis = System.currentTimeMillis()
+        )
     }
 
     /**
-     * Resets delta baseline when tracking stops or resumes
+     * Resets delta baseline when tracking stops, resumes, or changes network transport.
      */
     @Synchronized
     fun resetSpeedBaseline() {
-        lastRxBytes = -1L
-        lastTxBytes = -1L
-        lastTimestamp = -1L
+        speedSampler.reset()
+        lastSampledNetworkType = null
     }
 
     /**
