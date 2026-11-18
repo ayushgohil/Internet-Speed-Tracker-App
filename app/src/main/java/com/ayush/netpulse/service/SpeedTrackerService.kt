@@ -115,6 +115,8 @@ class SpeedTrackerService : Service() {
 
     private fun startForegroundMonitoring(source: String) {
         startBlockedByOs = false
+        speedSmoother.reset()
+        _liveSpeedState.value = LiveSpeed(0L, 0L)
         preferencesManager.isBackgroundMonitoringEnabled = true
         preferencesManager.lastServiceStartTimestamp = System.currentTimeMillis()
         preferencesManager.lastKnownServiceState = "Active"
@@ -415,6 +417,7 @@ class SpeedTrackerService : Service() {
         preferencesManager.lastKnownServiceState = "Stopped"
         _isServiceRunningState.value = false
         _liveSpeedState.value = LiveSpeed(0L, 0L)
+        speedSmoother.reset()
 
         trackerJob?.cancel()
         networkObserverJob?.cancel()
