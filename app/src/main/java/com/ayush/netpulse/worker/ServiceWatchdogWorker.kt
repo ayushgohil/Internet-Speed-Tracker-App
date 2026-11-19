@@ -26,13 +26,16 @@ class ServiceWatchdogWorker(
         val isRunning = SpeedTrackerService.isServiceRunningState.value
 
         Log.d(TAG, "Watchdog check: monitoringEnabled=$isEnabled, isRunning=$isRunning")
+        prefs.appendRevivalLog("watchdog", "check (monitoringEnabled=$isEnabled, serviceRunning=$isRunning)")
 
         if (isEnabled && !isRunning) {
             Log.w(TAG, "Service is stopped while monitoring was enabled! Reviving service now...")
             try {
+                prefs.appendRevivalLog("watchdog", "recovery requested")
                 SpeedTrackerService.start(applicationContext, "watchdog")
             } catch (e: Throwable) {
                 Log.e(TAG, "Watchdog failed to revive service directly; scheduling alarm: ${e.message}", e)
+                prefs.appendRevivalLog("watchdog", "recovery exception (${e.javaClass.simpleName}: ${e.message})")
                 SpeedTrackerService.scheduleRestartAlarm(applicationContext, 1000L)
             }
         }
