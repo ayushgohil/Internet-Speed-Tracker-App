@@ -17,8 +17,10 @@ class ServiceRestartReceiver : BroadcastReceiver() {
         Log.d(TAG, "ServiceRestartReceiver triggered by action: $action")
 
         val prefs = PreferencesManager.getInstance(context)
+        prefs.appendRevivalLog("receiver:${action.substringAfterLast('.')}", "delivered")
         if (!prefs.isBackgroundMonitoringEnabled) {
             Log.d(TAG, "Background monitoring is disabled by user; skipping revive.")
+            prefs.appendRevivalLog("receiver", "skipped (monitoring disabled)")
             return
         }
 
@@ -33,9 +35,11 @@ class ServiceRestartReceiver : BroadcastReceiver() {
                 else -> "receiver:${action.substringAfterLast('.')}"
             }
             // start() handles blocked starts itself (backoff retry + tap-to-resume notification).
+            prefs.appendRevivalLog(source, "start requested by receiver")
             SpeedTrackerService.start(context, source)
         } else {
             Log.d(TAG, "SpeedTrackerService is already actively running")
+            prefs.appendRevivalLog("receiver", "skipped (service state already running)")
         }
     }
 
