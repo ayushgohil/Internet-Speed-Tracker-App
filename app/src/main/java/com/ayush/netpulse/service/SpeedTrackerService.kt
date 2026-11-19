@@ -62,10 +62,15 @@ class SpeedTrackerService : Service() {
         powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         createNotificationChannel()
         Log.d(TAG, "SpeedTrackerService onCreate")
+        preferencesManager.appendRevivalLog("service", "created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // If intent is null, Android recreated the service via START_STICKY
+        preferencesManager.appendRevivalLog(
+            "service-start",
+            if (intent == null) "received null intent (START_STICKY restore)" else "received action=${intent.action ?: ACTION_START}"
+        )
         if (intent == null) {
             if (!preferencesManager.isBackgroundMonitoringEnabled) {
                 Log.d(TAG, "System recreated START_STICKY service but user previously disabled monitoring; stopping self")
@@ -76,6 +81,7 @@ class SpeedTrackerService : Service() {
             }
 
             Log.d(TAG, "System recreated START_STICKY service while monitoring was enabled; restoring foreground session")
+            preferencesManager.appendRevivalLog("system-restart", "sticky restore accepted")
             preferencesManager.serviceRestartCount = preferencesManager.serviceRestartCount + 1
             preferencesManager.lastKnownServiceState = "Active (Restored by OS)"
             startForegroundMonitoring("system-restart")
@@ -672,8 +678,10 @@ class SpeedTrackerService : Service() {
                     )
                 }
                 Log.d(TAG, "Scheduled restart alarm for ${delayMillis}ms in future")
+                PreferencesManager.getInstance(context).appendRevivalLog("restart-alarm", "scheduled (${delayMillis}ms)")
             } catch (e: Throwable) {
                 Log.e(TAG, "Failed to schedule restart alarm: ${e.message}", e)
+                PreferencesManager.getInstance(context).appendRevivalLog("restart-alarm", "schedule failed (${e.javaClass.simpleName}: ${e.message})")
             }
         }
 
