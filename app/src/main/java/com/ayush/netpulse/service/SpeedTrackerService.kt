@@ -150,6 +150,7 @@ class SpeedTrackerService : Service() {
         ServiceRevival.onStartSucceeded(this, source)
         // Keep a system-held network callback so we get woken (even if killed) when internet returns.
         ServiceRevival.registerNetworkWakeup(this)
+        com.ayush.netpulse.util.ConnectionHistory.start(applicationContext)
         startSamplingLoops()
     }
 
@@ -412,6 +413,8 @@ class SpeedTrackerService : Service() {
         val repository = (application as NetPulseApp).networkRepository
         repository.resetSpeedBaseline()
 
+        com.ayush.netpulse.util.ConnectionHistory.stop(applicationContext)
+
         // User turned tracking off: no more wake-ups, retries or resume prompts.
         ServiceRevival.unregisterNetworkWakeup(this)
         ServiceRevival.cancelResumePrompt(this)
@@ -573,6 +576,7 @@ class SpeedTrackerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        com.ayush.netpulse.util.ConnectionHistory.stop(applicationContext)
         val now = System.currentTimeMillis()
         preferencesManager.lastServiceDestroyTimestamp = now
 

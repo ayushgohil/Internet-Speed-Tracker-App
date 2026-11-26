@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ayush.netpulse.ui.apps.AppUsageTab
+import com.ayush.netpulse.ui.tools.NetworkToolsTab
 import com.ayush.netpulse.ui.dashboard.DashboardTab
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.navigation.NavScreen
@@ -276,6 +277,10 @@ fun MainScreen(
                             onRequestBatteryOptimization = onRequestBatteryOptimization,
                             onRefresh = onRefreshUsage
                         )
+                    }
+                    NavScreen.TOOLS -> {
+                        NetworkToolsTab(uiState, isVisible = pagerState.currentPage == NavScreen.TOOLS.ordinal,
+                            onOpenSettings = { isSettingsOpen = true })
                     }
                     NavScreen.APPS -> {
                         AppUsageTab(uiState.hasUsageAccessPermission, onRequestUsageAccess,
