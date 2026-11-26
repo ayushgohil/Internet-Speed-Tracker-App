@@ -215,9 +215,11 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
             runTest("Speed test") {
                 val network = uiState.networkType.displayName
                 val result = NetworkTests.speed { step, value, fraction ->
-                    phase = step
-                    measured = value
-                    progress = fraction
+                    androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
+                        phase = step
+                        measured = value
+                        progress = fraction
+                    }
                 }
                 phase = "Completed"
                 measured = result.downloadMbps
@@ -277,33 +279,61 @@ private fun ToolGrid(destinations: List<ToolDestination>, onSelect: (String) -> 
 
 @Composable
 private fun SpeedGauge(phase: String, measured: Double, progress: Float, running: Boolean) {
-    val primary = MaterialTheme.colorScheme.primary
-    val track = MaterialTheme.colorScheme.outline.copy(alpha = .2f)
-    val value by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = (measured / 100.0).coerceIn(0.0, 1.0).toFloat(),
-        animationSpec = androidx.compose.animation.core.tween(250), label = "speedGauge")
+    val colors = com.ayush.netpulse.ui.theme.LocalNetPulseColors.current
+    val accent = if (phase == "Upload") colors.upload else colors.download
+    val track = MaterialTheme.colorScheme.outline.copy(alpha = .18f)
+    val ink = MaterialTheme.colorScheme.onSurfaceVariant
+    val displayed by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = measured.coerceAtLeast(0.0).toFloat(), animationSpec = androidx.compose.animation.core.tween(450), label = "measuredSpeed")
+    val fraction by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = gaugeFraction(measured), animationSpec = androidx.compose.animation.core.tween(450), label = "needle")
+    val transfer by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f), animationSpec = androidx.compose.animation.core.tween(300), label = "transfer")
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("THROUGHPUT", style = MaterialTheme.typography.labelMedium)
+                Text(phase.uppercase(Locale.US), color = accent, style = MaterialTheme.typography.labelMedium)
+            }
+            Box(Modifier.fillMaxWidth().aspectRatio(1.15f), contentAlignment = Alignment.Center) {
                 androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                    val stroke = 12.dp.toPx()
-                    val inset = stroke / 2
-                    val bounds = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
-                    val origin = androidx.compose.ui.geometry.Offset(inset, inset)
-                    val style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                    drawArc(track, 140f, 260f, false, origin, bounds, style = style)
-                    drawArc(primary, 140f, 260f * value, false, origin, bounds, style = style)
+                    val center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height * .53f)
+                    val radius = minOf(size.width, size.height) * .43f
+                    val origin = androidx.compose.ui.geometry.Offset(center.x - radius, center.y - radius)
+                    val bounds = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
+                    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    drawArc(track, 135f, 270f, false, origin, bounds, style = stroke)
+                    if (fraction > 0) drawArc(accent, 135f, 270f * fraction, false, origin, bounds, style = stroke)
+                    fun point(degrees: Float, r: Float): androidx.compose.ui.geometry.Offset {
+                        val angle = Math.toRadians(degrees.toDouble())
+                        return center + androidx.compose.ui.geometry.Offset((kotlin.math.cos(angle) * r).toFloat(), (kotlin.math.sin(angle) * r).toFloat())
+                    }
+                    for (tick in 0..40) {
+                        val angle = 135f + 270f * tick / 40
+                        drawLine(if (tick % 5 == 0) ink else track, point(angle, radius * .83f), point(angle, radius * if (tick % 5 == 0) .72f else .78f), if (tick % 5 == 0) 2.dp.toPx() else 1.dp.toPx())
+                    }
+                    val angle = 135f + 270f * fraction
+                    drawLine(accent.copy(alpha = .16f), point(angle, radius * .52f), point(angle, radius * .94f), 10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    drawLine(accent, point(angle, radius * .60f), point(angle, radius * .95f), 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(phase, style = MaterialTheme.typography.labelLarge)
-                    Text(String.format(Locale.US, "%.1f", measured), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                    Text("Mbps", style = MaterialTheme.typography.bodyMedium)
-                    Text("Gauge scale 0–100+", style = MaterialTheme.typography.labelSmall)
+                    Text(if (running) phase else if (phase == "Completed") "Download result" else phase, style = MaterialTheme.typography.labelLarge)
+                    Text(String.format(Locale.US, "%.1f", displayed), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = accent)
+                    Text("Mbps", style = MaterialTheme.typography.titleSmall)
+                }
+                Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(.75f), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("0", style = MaterialTheme.typography.labelSmall)
+                    Text("Log scale", style = MaterialTheme.typography.labelSmall)
+                    Text("1000+", style = MaterialTheme.typography.labelSmall)
                 }
             }
-            if (running) LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-            Text("Short transfer estimate · about 6 MB", style = MaterialTheme.typography.labelSmall)
+            if (running) {
+                LinearProgressIndicator(progress = { if (phase == "Upload") .5f + transfer * .5f else transfer * .5f }, modifier = Modifier.fillMaxWidth(), color = accent)
+                Text("Measured transfer · ${(transfer * 100).toInt()}% of stage", style = MaterialTheme.typography.labelSmall)
+            } else Text("Short transfer estimate · about 6 MB", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
+
+internal fun gaugeFraction(mbps: Double): Float =
+    (kotlin.math.ln1p(mbps.coerceAtLeast(0.0)) / kotlin.math.ln1p(1000.0)).toFloat().coerceIn(0f, 1f)

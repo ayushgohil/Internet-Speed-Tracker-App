@@ -112,9 +112,16 @@ fun AppUsageTab(hasPermission: Boolean, onRequestUsageAccess: () -> Unit, isVisi
     var loadedDays by remember { mutableStateOf(0) }
     var lastUpdated by remember { mutableStateOf(0L) }
     var selected by remember { mutableStateOf<AppUsage?>(null) }
-    LaunchedEffect(hasPermission, days, refresh, isVisible) {
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var foreground by remember(owner) { mutableStateOf(owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+    DisposableEffect(owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ -> foreground = owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(hasPermission, days, refresh, isVisible, foreground) {
         if (!hasPermission) { appCache.evictAll(); records = emptyList(); loadedDays = 0; selected = null; loading = false; return@LaunchedEffect }
-        if (!isVisible) { loading = false; return@LaunchedEffect }
+        if (!isVisible || !foreground) { loading = false; return@LaunchedEffect }
         val date = java.time.LocalDate.now().toString()
         val cached = appCache.get(days)?.takeIf { it.date == date }
         records = cached?.records.orEmpty()

@@ -41,20 +41,28 @@ internal fun SmoothLiveSpeedChart(history: List<LiveSpeed>, animate: Boolean) {
         if (animate && resumed) scale.animateTo(target, androidx.compose.animation.core.tween(650))
         else scale.snapTo(target)
     }
+    val latestSample by rememberUpdatedState(latest)
+    val sampleCount by rememberUpdatedState(samples.size)
+    LaunchedEffect(animate, resumed, samples.size >= 2) {
+        if (!animate || !resumed || sampleCount < 2) {
+            viewport.value = latestSample.toDouble()
+            return@LaunchedEffect
+        }
+        var previousFrame = withFrameNanos { it }
+        while (true) {
+            val frame = withFrameNanos { it }
+            val delta = ((frame - previousFrame) / 1_000_000.0).coerceIn(0.0, 100.0)
+            previousFrame = frame
+            val newest = latestSample.toDouble()
+            // Keep a small display buffer so arriving samples are already available when drawn.
+            val targetEnd = newest + 150.0
+            val error = targetEnd - viewport.value
+            viewport.value = if (kotlin.math.abs(error) > 12_000) newest - 750.0
+                else viewport.value + (delta * (1.0 + error / 1000.0).coerceIn(.25, 2.0)).coerceAtMost((newest + 1500.0 - viewport.value).coerceAtLeast(0.0))
+        }
+    }
     LaunchedEffect(latest, animate, resumed) {
-        if (!animate || !resumed || samples.size < 2 || kotlin.math.abs(viewport.value - latest) > 12_000) {
-            viewport.value = latest.toDouble()
-        }
-        if (animate && resumed && samples.size >= 2) {
-            val from = viewport.value
-            val to = latest.toDouble() + 1000.0
-            val start = withFrameNanos { it }
-            var fraction: Double
-            do {
-                fraction = withFrameNanos { ((it - start) / 1_000_000_000.0).coerceIn(0.0, 1.0) }
-                viewport.value = from + (to - from) * fraction
-            } while (fraction < 1.0)
-        }
+        if (!animate || !resumed || samples.size < 2) viewport.value = latest.toDouble()
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(if (!animate) "Recent traffic" else "Live traffic", style = MaterialTheme.typography.labelMedium)
@@ -74,7 +82,7 @@ internal fun SmoothLiveSpeedChart(history: List<LiveSpeed>, animate: Boolean) {
         repeat(3) { i -> val y = bottom * i / 2f; drawLine(grid, Offset(0f, y), Offset(size.width, y)) }
         val end = viewport.value
         val start = end - 60_000.0
-        val ceiling = maxOf(scale.value, 1f)
+        val ceiling = maxOf(scale.value, target, 1f)
         val stroke = Stroke(strokeWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         fun x(sample: LiveSpeed) = ((sample.timestamp - start) / 60_000.0 * size.width).toFloat()
         fun y(sample: LiveSpeed, download: Boolean): Float {

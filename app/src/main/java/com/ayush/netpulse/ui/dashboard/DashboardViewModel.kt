@@ -351,30 +351,31 @@ class DashboardViewModel(
 
     /** Sets the monthly mobile data limit in GB; 0 or less turns the limit and its alerts off. */
     fun setDailyDataLimitGb(gb: Double) {
-        val bytes = if (gb.isFinite() && gb > 0.0) DataLimit.gbToBytes(gb.coerceAtMost(1000.0)) else 0L
+        val bytes = DataLimit.gbToBytes(gb)
         preferencesManager.dailyDataLimitBytes = bytes
         preferencesManager.dailyDataLimitAlertState = ""
         _uiState.update { it.copy(dailyDataLimitBytes = bytes) }
-        if (bytes > 0 && _uiState.value.hasUsageAccessPermission) loadDailyDataUsage(isSilent = true)
+        if (bytes != 0L && _uiState.value.hasUsageAccessPermission) loadDailyDataUsage(forceReconcile = true)
     }
 
     fun setDataLimitGb(gb: Double) {
-        val bytes = if (gb > 0.0) DataLimit.gbToBytes(gb) else 0L
+        val bytes = DataLimit.gbToBytes(gb)
         preferencesManager.dataLimitBytes = bytes
-        if (bytes == 0L) preferencesManager.cachedCycleMobileBytes = 0L
+        preferencesManager.cachedCycleMobileBytes = 0L
         preferencesManager.dataLimitAlertState = "" // new limit: alerts may fire again
         _uiState.update { it.copy(dataLimitBytes = bytes, cycleMobileBytes = preferencesManager.cachedCycleMobileBytes) }
-        if (bytes > 0L && _uiState.value.hasUsageAccessPermission) loadDailyDataUsage(isSilent = true)
+        if (bytes != 0L && _uiState.value.hasUsageAccessPermission) loadDailyDataUsage(forceReconcile = true)
         UsageWidgetProvider.refresh(getApplication())
     }
 
     fun setDataLimitCycleDay(day: Int) {
         val safeDay = day.coerceIn(DataLimit.MIN_CYCLE_DAY, DataLimit.MAX_CYCLE_DAY)
         preferencesManager.dataLimitCycleDay = safeDay
+        preferencesManager.cachedCycleMobileBytes = 0L
         preferencesManager.dataLimitAlertState = ""
-        _uiState.update { it.copy(dataLimitCycleDay = safeDay) }
-        if (preferencesManager.dataLimitBytes > 0L && _uiState.value.hasUsageAccessPermission) {
-            loadDailyDataUsage(isSilent = true)
+        _uiState.update { it.copy(dataLimitCycleDay = safeDay, cycleMobileBytes = 0L) }
+        if (preferencesManager.dataLimitBytes != 0L && _uiState.value.hasUsageAccessPermission) {
+            loadDailyDataUsage(forceReconcile = true)
         }
     }
 
