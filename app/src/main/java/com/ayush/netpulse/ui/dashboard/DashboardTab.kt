@@ -1,6 +1,11 @@
 package com.ayush.netpulse.ui.dashboard
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.Canvas
 import com.ayush.netpulse.ui.apps.TopAppsTodayCard
 import com.ayush.netpulse.ui.apps.UsageSplitBar
@@ -108,8 +113,8 @@ fun DashboardTab(
         // 1. UNIFIED LIVE NETWORK ACTIVITY HERO
         item(key = "live_speed_hero") {
             LiveSpeedHeroCard(
-                downloadFormatted = uiState.liveSpeed.formattedDownload,
-                uploadFormatted = uiState.liveSpeed.formattedUpload,
+                downloadBytes = uiState.liveSpeed.downloadBytesPerSec,
+                uploadBytes = uiState.liveSpeed.uploadBytesPerSec,
                 networkType = uiState.networkType,
                 isMonitoringRunning = uiState.isBackgroundServiceRunning,
                 onToggleMonitoring = onToggleBackgroundService,
@@ -271,8 +276,8 @@ fun DashboardTab(
  */
 @Composable
 private fun LiveSpeedHeroCard(
-    downloadFormatted: String,
-    uploadFormatted: String,
+    downloadBytes: Long,
+    uploadBytes: Long,
     networkType: NetworkType,
     isMonitoringRunning: Boolean,
     onToggleMonitoring: () -> Unit,
@@ -280,6 +285,8 @@ private fun LiveSpeedHeroCard(
     animateGraph: Boolean
 ) {
     val npColors = LocalNetPulseColors.current
+    val download by animateFloatAsState(downloadBytes.toFloat(), if (animateGraph) tween(300) else snap(), label = "downloadCounter")
+    val upload by animateFloatAsState(uploadBytes.toFloat(), if (animateGraph) tween(300) else snap(), label = "uploadCounter")
 
     Card(
         modifier = Modifier
@@ -308,7 +315,6 @@ private fun LiveSpeedHeroCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { onToggleMonitoring() }
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     val dotColor by animateColorAsState(
@@ -336,7 +342,7 @@ private fun LiveSpeedHeroCard(
                             uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
-                        modifier = Modifier.scale(0.85f)
+                        modifier = Modifier.semantics { stateDescription = if (isMonitoringRunning) "Tracking active" else "Tracking paused" }
                     )
                 }
             }
@@ -380,7 +386,7 @@ private fun LiveSpeedHeroCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = downloadFormatted,
+                        text = NetworkUtils.formatSpeed(download.toLong().coerceAtLeast(0L)),
                         style = MaterialTheme.typography.headlineLarge,
                         color = npColors.download,
                         fontWeight = FontWeight.Bold,
@@ -422,7 +428,7 @@ private fun LiveSpeedHeroCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = uploadFormatted,
+                        text = NetworkUtils.formatSpeed(upload.toLong().coerceAtLeast(0L)),
                         style = MaterialTheme.typography.headlineMedium,
                         color = npColors.upload,
                         fontWeight = FontWeight.SemiBold,

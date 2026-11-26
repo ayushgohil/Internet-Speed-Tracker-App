@@ -1,6 +1,10 @@
 package com.ayush.netpulse.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.abs
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -220,7 +224,7 @@ fun MainScreen(
                     screens.forEach { screen ->
                         NavigationBarItem(
                             selected = pagerState.currentPage == screen.ordinal,
-                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(screen.ordinal) } },
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(screen.ordinal, animationSpec = tween(260)) } },
                             icon = { Icon(screen.icon, contentDescription = null) },
                             label = { Text(screen.title) }
                         )
@@ -236,11 +240,15 @@ fun MainScreen(
         ) { innerPadding ->
             HorizontalPager(
                 state = pagerState,
-                beyondBoundsPageCount = 1,
+                beyondBoundsPageCount = 0,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
             ) { page ->
+                Box(Modifier.fillMaxSize().graphicsLayer {
+                    val distance = abs(pagerState.currentPage - page + pagerState.currentPageOffsetFraction).coerceIn(0f, 1f)
+                    alpha = 1f - distance * .12f
+                }) {
                 when (screens[page]) {
                     NavScreen.OVERVIEW -> {
                         DashboardTab(
@@ -286,6 +294,7 @@ fun MainScreen(
                             lazyListState = usageLazyListState
                         )
                     }
+                }
                 }
             }
         }
