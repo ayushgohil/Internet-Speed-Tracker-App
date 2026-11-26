@@ -16,7 +16,7 @@ android {
         // version is easy to tell apart. Local builds fall back to 1.
         val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionCode = buildNumber
-        versionName = "1.1.$buildNumber"
+        versionName = "1.2.$buildNumber"
 
         // Optional, for diagnosing install problems: -PappIdSuffix=.test builds the app under a
         // different package name so it installs side by side with the normal app.

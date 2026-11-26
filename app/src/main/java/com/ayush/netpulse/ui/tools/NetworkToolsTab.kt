@@ -187,11 +187,14 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
         if (page == "connection" && shown.isEmpty()) item { Text("No matching connection events recorded.") }
         if (page == "connection") items(shown) { event ->
             Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.History, null, tint = if (event.state == "Disconnected" || event.state.endsWith("Unvalidated") || event.state.endsWith("Sign-in required")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f)) {
                     Text(event.state, fontWeight = FontWeight.SemiBold)
                     Text(DateFormat.getDateTimeInstance().format(Date(event.time)), style = MaterialTheme.typography.bodySmall)
                     event.durationMs?.let { Text("Previous state: ${it / 1000}s observed",
                         style = MaterialTheme.typography.labelSmall) }
+                    }
                 }
             }
         }

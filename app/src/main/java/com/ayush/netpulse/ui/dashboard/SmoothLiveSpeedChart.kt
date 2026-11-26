@@ -6,6 +6,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -59,44 +61,74 @@ internal fun SmoothLiveSpeedChart(history: List<LiveSpeed>, animate: Boolean) {
         Text("Peak: " + NetworkUtils.formatSpeed(peak), style = MaterialTheme.typography.labelSmall)
     }
     Spacer(Modifier.height(8.dp))
-    Canvas(Modifier.fillMaxWidth().height(108.dp)) {
-        val bottom = size.height - 2.dp.toPx()
+    val groups = remember(samples) { splitLiveSamples(samples) }
+    val downPath = remember { Path() }
+    val upPath = remember { Path() }
+    val area = remember { Path() }
+    val gradient = remember(colors.download) { Brush.verticalGradient(listOf(colors.download.copy(alpha = .18f), colors.download.copy(alpha = .02f))) }
+    val strokeWidth = 2.dp
+    Canvas(Modifier.fillMaxWidth().height(108.dp).semantics {
+        contentDescription = "Live traffic chart, peak " + NetworkUtils.formatSpeed(peak)
+    }) {
+        val bottom = (size.height - 2.dp.toPx()).coerceAtLeast(0f)
         repeat(3) { i -> val y = bottom * i / 2f; drawLine(grid, Offset(0f, y), Offset(size.width, y)) }
-        val end = viewport.value.toLong()
-        val start = end - 60_000L
+        val end = viewport.value
+        val start = end - 60_000.0
         val ceiling = maxOf(scale.value, 1f)
-        fun series(value: (LiveSpeed) -> Long, color: Color, fill: Boolean) {
-            val groups = mutableListOf<MutableList<Offset>>()
-            var previous: Long? = null
-            samples.forEach { sample ->
-                if (previous == null || sample.timestamp - previous!! > 12_000L) groups.add(mutableListOf())
-                groups.last().add(Offset((sample.timestamp - start) / 60_000f * size.width,
-                    bottom * (1f - (value(sample) / ceiling).coerceIn(0f, 1f))))
-                previous = sample.timestamp
-            }
-            groups.forEach { points ->
-                if (points.size == 1) { drawCircle(color, 2.dp.toPx(), points.first()); return@forEach }
-                val path = Path().apply {
-                    moveTo(points.first().x, points.first().y)
-                    points.zipWithNext().forEach { (a, b) ->
-                        val mid = (a.x + b.x) / 2f
-                        cubicTo(mid, a.y, mid, b.y, b.x, b.y)
+        val stroke = Stroke(strokeWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun x(sample: LiveSpeed) = ((sample.timestamp - start) / 60_000.0 * size.width).toFloat()
+        fun y(sample: LiveSpeed, download: Boolean): Float {
+            val value = if (download) sample.downloadBytesPerSec else sample.uploadBytesPerSec
+            return bottom * (1f - (value / ceiling).coerceIn(0f, 1f))
+        }
+        fun series(download: Boolean, color: Color, path: Path) {
+            groups.forEach { group ->
+                if (group.size == 1) {
+                    drawCircle(color, 2.dp.toPx(), Offset(x(group[0]), y(group[0], download)))
+                } else {
+                    path.reset()
+                    var px = x(group[0])
+                    var py = y(group[0], download)
+                    path.moveTo(px, py)
+                    for (index in 1 until group.size) {
+                        val nx = x(group[index])
+                        val ny = y(group[index], download)
+                        val mid = (px + nx) / 2f
+                        path.cubicTo(mid, py, mid, ny, nx, ny)
+                        px = nx
+                        py = ny
                     }
+                    if (download) {
+                        area.reset()
+                        area.addPath(path)
+                        area.lineTo(px, bottom)
+                        area.lineTo(x(group[0]), bottom)
+                        area.close()
+                        drawPath(area, gradient)
+                    }
+                    drawPath(path, color, style = stroke)
                 }
-                if (fill) {
-                    val area = Path().apply { addPath(path); lineTo(points.last().x, bottom); lineTo(points.first().x, bottom); close() }
-                    drawPath(area, Brush.verticalGradient(listOf(color.copy(alpha = .18f), color.copy(alpha = .02f))))
-                }
-                drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
         clipRect {
-            series({ it.downloadBytesPerSec }, colors.download, true)
-            series({ it.uploadBytesPerSec }, colors.upload, false)
+            series(true, colors.download, downPath)
+            series(false, colors.upload, upPath)
         }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text("60s ago", style = MaterialTheme.typography.labelSmall)
         Text(if (samples.size < 2) "Collecting samples" else "Now", style = MaterialTheme.typography.labelSmall)
     }
+}
+
+/** Separate missing intervals once per sample update, not on every rendered frame. */
+internal fun splitLiveSamples(samples: List<LiveSpeed>): List<List<LiveSpeed>> {
+    val groups = mutableListOf<MutableList<LiveSpeed>>()
+    var previous: Long? = null
+    samples.forEach { sample ->
+        if (previous == null || sample.timestamp - previous!! > 12_000L) groups.add(mutableListOf())
+        groups.last().add(sample)
+        previous = sample.timestamp
+    }
+    return groups
 }

@@ -8,6 +8,11 @@ import android.telephony.TelephonyManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -63,7 +68,8 @@ internal fun WifiAnalyzerCard() {
                 status = if (accepted) "Showing latest available results; scan may still be in progress."
                     else "Scan unavailable or throttled. Showing cached results."
                 if (points.isEmpty()) status += " No networks returned. Check Wi-Fi and location settings."
-            } catch (_: Exception) { status = "Scan unavailable. Check permission, Wi-Fi and location settings." }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { status = "Scan unavailable. Check permission, Wi-Fi and location settings." }
             finally { scanning = false }
         }
     }
@@ -98,9 +104,16 @@ internal fun WifiAnalyzerCard() {
             }
             points.take(15).forEach { ap ->
                 HorizontalDivider()
-                Text(ap.name, style = MaterialTheme.typography.bodyMedium)
-                Text("${ap.signal} dBm · ${ap.frequency} MHz · Ch ${channel(ap.frequency) ?: "?"}",
-                    style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(ap.name, style = MaterialTheme.typography.titleSmall)
+                        Text("${band(ap.frequency)} · Ch ${channel(ap.frequency) ?: "?"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Column(Modifier.width(82.dp), horizontalAlignment = Alignment.End) {
+                        Text("${ap.signal} dBm", style = MaterialTheme.typography.labelMedium)
+                        LinearProgressIndicator(progress = { ((ap.signal + 100) / 60f).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(4.dp)))
+                    }
+                }
             }
             if (points.size > 15) Text("Showing 15 strongest networks; chart includes up to 100.", style = MaterialTheme.typography.labelSmall)
         }
@@ -146,7 +159,15 @@ internal fun CellularDetailsCard() {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Cellular information", style = MaterialTheme.typography.titleMedium)
-            Text(details)
+            details.split("\n\n").forEach { entry ->
+                Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        entry.lines().forEachIndexed { index, line ->
+                            Text(line, style = if (index == 0) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
             Text("Android may hide subscriptions or radio details. Non-standalone 5G can report LTE. Usage totals are not split by SIM.",
                 style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = {

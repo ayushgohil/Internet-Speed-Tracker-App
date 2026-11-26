@@ -151,7 +151,7 @@ fun AppUsageTab(hasPermission: Boolean, onRequestUsageAccess: () -> Unit, isVisi
     val current = if (loadedDays == days) records else emptyList()
     val total = current.sumOf { when (filter) { "Mobile" -> it.mobile; "Wi-Fi" -> it.wifi; else -> it.total } }
     val rankingTotal = current.sumOf { amount(it) }
-    val visible = current.filter { amount(it) > 0 && it.name.contains(search, ignoreCase = true) }.sortedByDescending { amount(it) }
+    val visible = remember(current, filter, sort, search) { current.filter { amount(it) > 0 && it.name.contains(search, ignoreCase = true) }.sortedByDescending { amount(it) } }
     if (selected != null && isVisible) {
         BackHandler { selected = null }
         AppDetailsPage(selected!!, days) { selected = null }
@@ -207,9 +207,10 @@ fun AppUsageTab(hasPermission: Boolean, onRequestUsageAccess: () -> Unit, isVisi
                 }
             }
         }
-        if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
-        if (!loading && error == null && visible.isEmpty()) item { Text("No matching usage records.") }
+        if (loading && current.isEmpty()) items(5) { AppLoadingRow() }
+        else if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        error?.let { message -> item { UsageFeedback("Unable to refresh", message, "Retry") { refresh++ } } }
+        if (!loading && error == null && visible.isEmpty()) item { UsageFeedback("No matching apps", if (search.isNotBlank()) "Try a different application name." else "No reported traffic for this selection.", if (search.isNotBlank()) "Clear search" else "Refresh") { if (search.isNotBlank()) search = "" else refresh++ } }
         items(visible, key = { it.uid }) { app ->
             Surface(onClick = { selected = app }, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -315,6 +316,34 @@ internal fun TopAppsTodayCard(isVisible: Boolean, onOpen: () -> Unit) {
                     Text(NetworkUtils.formatBytes(app.total), fontWeight = FontWeight.SemiBold)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AppLoadingRow() {
+    val placeholder = MaterialTheme.colorScheme.surfaceVariant
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(placeholder))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.fillMaxWidth(.55f).height(14.dp).clip(CircleShape).background(placeholder))
+                Box(Modifier.fillMaxWidth(.85f).height(9.dp).clip(CircleShape).background(placeholder))
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsageFeedback(title: String, description: String, action: String, onAction: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Default.Apps, null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(description, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = onAction) { Text(action) }
         }
     }
 }
