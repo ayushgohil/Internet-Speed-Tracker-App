@@ -12,15 +12,21 @@ import javax.net.ssl.HttpsURLConnection
 
 internal object NetworkTests {
     private const val HOST = "speed.cloudflare.com"
-    private const val DOWNLOAD_BYTES = 5_000_000
-    private const val UPLOAD_BYTES = 1_000_000
+    enum class Budget(val label: String, val downloadBytes: Int, val uploadBytes: Int, val stageMillis: Long) {
+        LOW("Low data", 5_000_000, 1_000_000, 3500),
+        STANDARD("Balanced", 40_000_000, 12_000_000, 6500),
+        EXTENDED("Extended", 100_000_000, 30_000_000, 8500);
+        val maxMb get() = (downloadBytes + uploadBytes) / 1_000_000
+    }
+    data class Transfer(val mbps: Double, val bytes: Long)
+    data class Progress(val stage: String, val mbps: Double = 0.0, val fraction: Float = 0f, val bytes: Long = 0)
 
     data class Latency(val samples: List<Double>, val attempts: Int) {
         val average: Double? get() = samples.takeIf { it.isNotEmpty() }?.average()
         val jitter: Double? get() = samples.zipWithNext { a, b -> kotlin.math.abs(a - b) }
             .takeIf { it.isNotEmpty() }?.average()
     }
-    data class Speed(val downloadMbps: Double, val uploadMbps: Double)
+    data class Speed(val downloadMbps: Double, val uploadMbps: Double, val bytes: Long = 0)
 
     /** TCP connect latency, not ICMP ping. DNS resolution is measured separately. */
     suspend fun latency(): Latency = withContext(Dispatchers.IO) {
@@ -45,8 +51,11 @@ internal object NetworkTests {
         (SystemClock.elapsedRealtime() - start) to addresses
     }
 
-    /** Bounded transfer test: at most 5 MB download and 1 MB upload payload. */
-    suspend fun speed(onProgress: (String, Double, Float) -> Unit = { _, _, _ -> }): Speed = withContext(Dispatchers.IO) {
+    /** Sequential bounded HTTPS transfers. Duration is a soft target, byte caps are hard payload limits. */
+    suspend fun speed(
+        budget: Budget = Budget.LOW,
+        onProgress: (Progress) -> Unit = {}
+    ): Speed = withContext(Dispatchers.IO) {
         fun connection(path: String) = (URL("https://$HOST$path").openConnection() as HttpsURLConnection).apply {
             connectTimeout = 5000
             readTimeout = 5000
@@ -54,57 +63,86 @@ internal object NetworkTests {
             instanceFollowRedirects = false
             setRequestProperty("Accept-Encoding", "identity")
         }
-        val download = connection("/__down?bytes=$DOWNLOAD_BYTES")
-        val buffer = ByteArray(16_384)
-        var received = 0L
-        var lastProgress = 0L
-        val start = SystemClock.elapsedRealtimeNanos()
-        try {
-            check(download.responseCode == 200) { "Download endpoint unavailable" }
-            download.inputStream.use { input ->
-                while (received < DOWNLOAD_BYTES) {
-                    ensureActive()
-                    check(SystemClock.elapsedRealtimeNanos() - start < 30_000_000_000L) { "Download timed out" }
-                    val count = input.read(buffer, 0, minOf(buffer.size.toLong(), DOWNLOAD_BYTES - received).toInt())
-                    if (count < 0) break
-                    received += count
-                    val tick = SystemClock.elapsedRealtime()
-                    if (tick - lastProgress >= 100 || received == DOWNLOAD_BYTES.toLong()) {
-                        lastProgress = tick
-                        onProgress("Download", received * 8000.0 / (SystemClock.elapsedRealtimeNanos() - start).coerceAtLeast(1), received.toFloat() / DOWNLOAD_BYTES)
+        val buffer = ByteArray(64 * 1024)
+        // Noncompressible payload prevents an intermediary from artificially inflating results.
+        java.util.Random().nextBytes(buffer)
+        suspend fun transfer(upload: Boolean, cap: Int): Transfer {
+            val stage = if (upload) "Upload" else "Download"
+            val start = SystemClock.elapsedRealtimeNanos()
+            var bytes = 0L
+            var confirmed = 0L
+            var tick = start
+            var tickBytes = 0L
+            var smooth = 0.0
+            fun elapsed() = (SystemClock.elapsedRealtimeNanos() - start) / 1_000_000
+            fun publish(force: Boolean = false) {
+                val now = SystemClock.elapsedRealtimeNanos()
+                val interval = now - tick
+                if (interval >= 80_000_000L || force) {
+                    if (interval >= 20_000_000L && bytes > tickBytes) {
+                        val rate = throughputMbps(bytes - tickBytes, interval)
+                        smooth = if (smooth == 0.0) rate else smooth * .55 + rate * .45
+                        tick = now
+                        tickBytes = bytes
                     }
+                    onProgress(Progress(stage, smooth, maxOf(bytes.toFloat() / cap, elapsed().toFloat() / budget.stageMillis).coerceIn(0f, 1f), bytes))
                 }
             }
-            check(received == DOWNLOAD_BYTES.toLong()) { "Incomplete download" }
-        } finally { download.disconnect() }
-        val downloadMbps = received * 8000.0 / (SystemClock.elapsedRealtimeNanos() - start).coerceAtLeast(1)
-        ensureActive()
-        val upload = connection("/__up").apply {
-            requestMethod = "POST"
-            doOutput = true
-            setFixedLengthStreamingMode(UPLOAD_BYTES)
-            setRequestProperty("Content-Type", "application/octet-stream")
+            onProgress(Progress(stage))
+            while (bytes < cap && (bytes == 0L || elapsed() < budget.stageMillis)) {
+                ensureActive()
+                // Bounded requests limit the amount committed to any individual HTTP transfer.
+                val chunk = minOf((cap - bytes).toInt(), if (upload) 1_000_000 else 5_000_000)
+                val conn = connection(if (upload) "/__up" else "/__down?bytes=$chunk")
+                val before = bytes
+                try {
+                    if (upload) {
+                        conn.requestMethod = "POST"
+                        conn.doOutput = true
+                        conn.setFixedLengthStreamingMode(chunk)
+                        conn.setRequestProperty("Content-Type", "application/octet-stream")
+                        conn.outputStream.use { out ->
+                            while (bytes - before < chunk) {
+                                ensureActive()
+                                check(elapsed() < 30_000) { "Upload timed out" }
+                                val count = minOf(buffer.size.toLong(), chunk - (bytes - before)).toInt()
+                                out.write(buffer, 0, count)
+                                bytes += count
+                                publish()
+                            }
+                        }
+                        check(conn.responseCode in 200..299) { "Upload endpoint unavailable" }
+                        confirmed = bytes
+                    } else {
+                        check(conn.responseCode == 200) { "Download endpoint unavailable" }
+                        conn.inputStream.use { input ->
+                            while (bytes - before < chunk) {
+                                ensureActive()
+                                check(elapsed() < 30_000) { "Download timed out" }
+                                val count = input.read(buffer, 0, minOf(buffer.size.toLong(), chunk - (bytes - before)).toInt())
+                                if (count < 0) break
+                                bytes += count
+                                publish()
+                                if (elapsed() >= budget.stageMillis && bytes > 0) break
+                            }
+                        }
+                        check(bytes > before) { "Empty download" }
+                        confirmed = bytes
+                    }
+                } finally { conn.disconnect() }
+                publish(true)
+            }
+            ensureActive()
+            check(confirmed > 0) { "No successful transfer" }
+            val result = throughputMbps(confirmed, SystemClock.elapsedRealtimeNanos() - start)
+            onProgress(Progress(stage, result, 1f, confirmed))
+            return Transfer(result, confirmed)
         }
-        val uploadStart = SystemClock.elapsedRealtimeNanos()
-        lastProgress = 0L
-        try {
-            upload.outputStream.use { out ->
-                var remaining = UPLOAD_BYTES
-                while (remaining > 0) {
-                    ensureActive()
-                    val count = minOf(remaining, buffer.size)
-                    out.write(buffer, 0, count)
-                    remaining -= count
-                    val tick = SystemClock.elapsedRealtime()
-                    if (tick - lastProgress >= 100 || remaining == 0) {
-                        lastProgress = tick
-                        onProgress("Upload", (UPLOAD_BYTES - remaining) * 8000.0 / (SystemClock.elapsedRealtimeNanos() - uploadStart).coerceAtLeast(1), (UPLOAD_BYTES - remaining).toFloat() / UPLOAD_BYTES)
-                    }
-                }
-            }
-            check(upload.responseCode in 200..299) { "Upload endpoint unavailable" }
-        } finally { upload.disconnect() }
-        Speed(downloadMbps, UPLOAD_BYTES * 8000.0 /
-            (SystemClock.elapsedRealtimeNanos() - uploadStart).coerceAtLeast(1))
+        val down = transfer(false, budget.downloadBytes)
+        val up = transfer(true, budget.uploadBytes)
+        Speed(down.mbps, up.mbps, down.bytes + up.bytes)
     }
+
+    internal fun throughputMbps(bytes: Long, nanos: Long): Double =
+        bytes.coerceAtLeast(0) * 8000.0 / nanos.coerceAtLeast(1)
 }
