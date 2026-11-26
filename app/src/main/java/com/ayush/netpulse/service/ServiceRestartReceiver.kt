@@ -19,6 +19,8 @@ class ServiceRestartReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
+        if (action !in setOf(ACTION_RESTART_SERVICE, ServiceRevival.ACTION_NETWORK_CHANGED,
+                Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_USER_PRESENT)) return
         Log.d(TAG, "ServiceRestartReceiver triggered by action: $action")
 
         val prefs = PreferencesManager.getInstance(context)

@@ -42,6 +42,7 @@ class SpeedTrackerService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var trackerJob: Job? = null
     private var networkObserverJob: Job? = null
+    private var usageRefreshJob: Job? = null
     private var currentNetworkType: NetworkType = NetworkType.DISCONNECTED
     private var isExplicitUserStop: Boolean = false
     // Set when Android refused to start us in the foreground; a backoff retry is already scheduled.
@@ -189,6 +190,7 @@ class SpeedTrackerService : Service() {
 
             while (isActive) {
                 val loopIterationStart = System.currentTimeMillis()
+                val loopElapsedStart = SystemClock.elapsedRealtime()
                 try {
                     val isScreenInteractive = powerManager.isInteractive
                     com.ayush.netpulse.util.ScreenUsageTracker.sample(applicationContext, isScreenInteractive)
@@ -204,7 +206,7 @@ class SpeedTrackerService : Service() {
                     floatingOverlay.update(speed, isScreenInteractive && !((getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked))
 
                     // Throttled SharedPreferences persistence: Avoid writing to flash memory every 1-2.5s all night
-                    if (now - lastPrefsWriteTimestamp >= 30000L || (!isOffline && (speed.downloadBytesPerSec > 0 || speed.uploadBytesPerSec > 0))) {
+                    if (now - lastPrefsWriteTimestamp >= 30000L || now < lastPrefsWriteTimestamp) {
                         preferencesManager.lastSpeedSampleTimestamp = now
                         lastPrefsWriteTimestamp = now
                     }
@@ -213,8 +215,8 @@ class SpeedTrackerService : Service() {
                     val todayStr = NetworkUtils.formatDateString(now)
                     if (now - lastUsageRefreshTimestamp >= 30000L || preferencesManager.cachedTodayDate != todayStr) {
                         lastUsageRefreshTimestamp = now
-                        if (NetworkUtils.hasUsageStatsPermission(this@SpeedTrackerService)) {
-                            serviceScope.launch(Dispatchers.IO) {
+                        if (usageRefreshJob?.isActive != true && NetworkUtils.hasUsageStatsPermission(this@SpeedTrackerService)) {
+                            usageRefreshJob = serviceScope.launch(Dispatchers.IO) {
                                 repository.getTodayDataUsage(forceReconcile = false)
                             }
                         }
@@ -291,7 +293,7 @@ class SpeedTrackerService : Service() {
                         isOffline -> 10000L
                         else -> 5000L
                     }
-                    val loopDuration = System.currentTimeMillis() - loopIterationStart
+                    val loopDuration = SystemClock.elapsedRealtime() - loopElapsedStart
                     val sleepTime = (targetInterval - loopDuration).coerceIn(100L, targetInterval)
                     delay(sleepTime)
 
@@ -419,6 +421,8 @@ class SpeedTrackerService : Service() {
         networkObserverJob?.cancel()
         trackerJob = null
         networkObserverJob = null
+        usageRefreshJob?.cancel()
+        usageRefreshJob = null
 
         val repository = (application as NetPulseApp).networkRepository
         repository.resetSpeedBaseline()

@@ -83,7 +83,7 @@
         <receiver
             android:name=".service.BootReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -94,7 +94,7 @@
         <receiver
             android:name=".service.ServiceRestartReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.ayush.netpulse.action.RESTART_SERVICE" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -19,6 +19,11 @@ import com.ayush.netpulse.data.model.NetworkType
 import com.ayush.netpulse.util.NetworkUtils
 import com.ayush.netpulse.util.PreferencesManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -37,6 +42,7 @@ class NetworkRepository(
     private val networkStatsManager =
         context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
 
+    private val usageMutex = Mutex()
     private var lastRxBytes: Long = -1L
     private var lastTxBytes: Long = -1L
     private var lastTimestamp: Long = -1L
@@ -54,6 +60,7 @@ class NetworkRepository(
         val elapsedNow = SystemClock.elapsedRealtime()
 
         if (currentRx == TrafficStats.UNSUPPORTED.toLong() || currentTx == TrafficStats.UNSUPPORTED.toLong()) {
+            resetSpeedBaseline()
             return LiveSpeed(0L, 0L, currentTime)
         }
 
@@ -133,11 +140,7 @@ class NetworkRepository(
         }
 
         try {
-            val request = NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .build()
-
-            connectivityManager.registerNetworkCallback(request, callback)
+            connectivityManager.registerDefaultNetworkCallback(callback)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register network callback: ${e.message}", e)
         }
@@ -149,14 +152,17 @@ class NetworkRepository(
                 Log.w(TAG, "Failed to unregister network callback: ${e.message}")
             }
         }
-    }
+    }.distinctUntilChanged()
 
     /**
      * Multi-day historical usage recovery:
      * Reconciles usage for today, yesterday, and any missed calendar days up to maxLookbackDays.
      * Protects existing non-zero records from being overwritten with temporary zeros or delayed drops.
      */
-    suspend fun reconcileMultiDayHistoricalUsage(maxLookbackDays: Int = 90): Result<Int> = withContext(Dispatchers.IO) {
+    suspend fun reconcileMultiDayHistoricalUsage(maxLookbackDays: Int = 90): Result<Int> =
+        usageMutex.withLock { reconcileUnlocked(maxLookbackDays) }
+
+    private suspend fun reconcileUnlocked(maxLookbackDays: Int): Result<Int> = withContext(Dispatchers.IO) {
         if (!NetworkUtils.hasUsageStatsPermission(context)) {
             val err = "Usage Access permission is not granted."
             preferencesManager.lastReconciliationStatus = "Failed: $err"
@@ -176,7 +182,8 @@ class NetworkRepository(
             val now = System.currentTimeMillis()
 
             // Look back up to maxLookbackDays, or at least 1 day back (yesterday) for delayed carrier logs
-            for (offset in (maxLookbackDays - 1) downTo 0) {
+            for (offset in (maxLookbackDays.coerceIn(1, 90) - 1) downTo 0) {
+                ensureActive()
                 val dayStartCal = Calendar.getInstance().apply {
                     add(Calendar.DAY_OF_YEAR, -offset)
                     set(Calendar.HOUR_OF_DAY, 0)
@@ -277,6 +284,8 @@ class NetworkRepository(
             preferencesManager.lastReconciliationStatus = "Success ($daysReconciled days updated at ${NetworkUtils.formatDateString(now)})"
 
             Result.success(daysReconciled)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val err = "Reconciliation error: ${e.localizedMessage}"
             preferencesManager.lastReconciliationStatus = err
@@ -289,7 +298,10 @@ class NetworkRepository(
      * Queries daily Wi-Fi and Mobile data usage from NetworkStatsManager for today,
      * and triggers multi-day reconciliation if stale or forced.
      */
-    suspend fun getTodayDataUsage(forceReconcile: Boolean = false): Result<DataUsage> = withContext(Dispatchers.IO) {
+    suspend fun getTodayDataUsage(forceReconcile: Boolean = false): Result<DataUsage> =
+        usageMutex.withLock { todayUsageUnlocked(forceReconcile) }
+
+    private suspend fun todayUsageUnlocked(forceReconcile: Boolean): Result<DataUsage> = withContext(Dispatchers.IO) {
         if (!NetworkUtils.hasUsageStatsPermission(context)) {
             val err = "Usage Access permission (PACKAGE_USAGE_STATS) is not granted."
             preferencesManager.lastKnownError = err
@@ -308,9 +320,9 @@ class NetworkRepository(
             // Full recovery daily; refresh recent days more frequently for delayed OS statistics.
             val fullAge = now - preferencesManager.lastFullReconciliationTimestamp
             if (forceReconcile || fullAge < 0 || fullAge >= 24 * 60 * 60 * 1000L) {
-                reconcileMultiDayHistoricalUsage(maxLookbackDays = 90)
+                reconcileUnlocked(maxLookbackDays = 90)
             } else if (timeSinceLastReconciliation < 0 || timeSinceLastReconciliation >= 15 * 60 * 1000L) {
-                reconcileMultiDayHistoricalUsage(maxLookbackDays = 2)
+                reconcileUnlocked(maxLookbackDays = 2)
             }
 
             val calendar = Calendar.getInstance().apply {
@@ -326,6 +338,7 @@ class NetworkRepository(
             var mobileRx = 0L
             var mobileTx = 0L
             var mobileQuerySucceeded = false
+            var wifiQuerySucceeded = false
 
             try {
                 @Suppress("DEPRECATION")
@@ -337,6 +350,7 @@ class NetworkRepository(
                 )
                 wifiRx = wifiBucket.rxBytes
                 wifiTx = wifiBucket.txBytes
+                wifiQuerySucceeded = true
             } catch (e: Exception) {
                 Log.w("NetworkRepository", "Could not query Wi-Fi summary: ${e.message}")
             }
@@ -356,6 +370,12 @@ class NetworkRepository(
                 Log.w("NetworkRepository", "Could not query Mobile data summary: ${e.message}")
             }
 
+            if (!wifiQuerySucceeded && !mobileQuerySucceeded) return@withContext Result.failure(IllegalStateException("Both usage queries failed"))
+            val existing = dailyUsageDao.getUsageForDate(NetworkUtils.formatDateString(now))
+            wifiRx = maxOf(wifiRx, existing?.wifiRxBytes ?: 0L)
+            wifiTx = maxOf(wifiTx, existing?.wifiTxBytes ?: 0L)
+            mobileRx = maxOf(mobileRx, existing?.mobileRxBytes ?: 0L)
+            mobileTx = maxOf(mobileTx, existing?.mobileTxBytes ?: 0L)
             val todayUsage = DataUsage(
                 mobileRxBytes = mobileRx,
                 mobileTxBytes = mobileTx,
@@ -364,6 +384,8 @@ class NetworkRepository(
                 queryStartTime = startOfDay,
                 queryEndTime = now
             )
+
+            dailyUsageDao.upsert(DailyUsageEntity(NetworkUtils.formatDateString(now), mobileRx, mobileTx, wifiRx, wifiTx, now))
 
             // Cache for fast and non-blocking notification rendering
             preferencesManager.cachedTodayMobileBytes = todayUsage.totalMobileBytes
@@ -376,6 +398,8 @@ class NetworkRepository(
             com.ayush.netpulse.widget.UsageWidgetProvider.refresh(context)
 
             Result.success(todayUsage)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             preferencesManager.lastKnownError = "Today usage query error: ${e.localizedMessage}"
             Result.failure(e)
