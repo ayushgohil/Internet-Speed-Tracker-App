@@ -10,7 +10,7 @@ A fast, private, offline-first Android app that shows your real-time download an
 ![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)
-![Version](https://img.shields.io/badge/Version-1.1-blue)
+![Version](https://img.shields.io/badge/Version-1.2-blue)
 ![Privacy](https://img.shields.io/badge/Privacy-local--first-success)
 
 [Features](#-features) · [Screenshots](#-screenshots) · [How it works](#-how-it-works) · [Get the APK](#-get-the-apk) · [Build from source](#-build-from-source) · [Troubleshooting](#-troubleshooting)
@@ -69,6 +69,13 @@ Passive monitoring is computed on your device. No account or analytics is requir
 - **Tap any day** for a detailed breakdown of mobile, Wi-Fi and the combined total.
 - **Daily table** with date, mobile, Wi-Fi and total columns, plus a sticky 90-day summary bar.
 - **History reconciliation:** re-syncs the past 90 days from Android's own network statistics, and never overwrites a larger known value with a temporary zero.
+
+### v1.2 interface
+- Curved, animated live traffic graph with a rolling time window and lifecycle-aware rendering.
+- Installed application icons, ranked usage, search, and dedicated app detail views.
+- Interactive stacked usage charts and calendar range selection.
+- Categorized Tools and Settings destinations, measured speed test gauge, and improved loading and feedback states.
+- Existing screenshots below are from an earlier version; updated device screenshots are pending.
 
 ### Apps, tools and customization
 - Per-app UID-based usage, search and network/date filters; Android can group or hide app identities.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2 (release candidate)
+
+- Improve live chart interpolation, animation and per-frame path reuse.
+- Resolve visible installed application identities and icons, cache usage results, and add ranked app details.
+- Redesign analytics, calendar selection, tools and settings navigation.
+- Add app loading placeholders, retry actions, radio signal indicators and connection event styling.
+- Add chart gap regression tests. Physical device performance and accessibility validation remain pending.
+
+
 ## 1.1 (release candidate)
 
 - Add dashboard live graphs, usage charts, per-app statistics and daily mobile limits.
