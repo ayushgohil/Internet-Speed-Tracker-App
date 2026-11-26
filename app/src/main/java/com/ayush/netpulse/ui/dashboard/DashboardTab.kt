@@ -2,6 +2,13 @@ package com.ayush.netpulse.ui.dashboard
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
+import com.ayush.netpulse.ui.apps.TopAppsTodayCard
+import com.ayush.netpulse.ui.apps.UsageSplitBar
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.DataUsage
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.History
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -111,6 +118,62 @@ fun DashboardTab(
             )
         }
 
+        // 3. COMPACT TODAY'S DATA CONSUMPTION CARD
+        item(key = "today_consumption") {
+            TodayConsumptionCard(
+                hasPermission = uiState.hasUsageAccessPermission,
+                mobileBytes = uiState.dailyUsage.mobileRxBytes + uiState.dailyUsage.mobileTxBytes,
+                wifiBytes = uiState.dailyUsage.wifiRxBytes + uiState.dailyUsage.wifiTxBytes,
+                mobileFormatted = uiState.dailyUsage.formattedMobile,
+                wifiFormatted = uiState.dailyUsage.formattedWifi,
+                totalFormatted = uiState.dailyUsage.formattedTotal,
+                onRequestPermission = onRequestUsageAccess
+            )
+        }
+        if (uiState.hasUsageAccessPermission) {
+            item(key = "usage_summary") {
+                val month = LocalDate.now().toString().take(7)
+                val monthRecords = uiState.recentDailyRecords.filter { it.date.startsWith(month) }
+                val mobile = monthRecords.sumOf { it.totalMobileBytes }
+                val wifi = monthRecords.sumOf { it.totalWifiBytes }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryTile("Month to date", NetworkUtils.formatBytes(mobile + wifi),
+                        "${monthRecords.size} recorded days", onNavigateToUsage, Modifier.weight(1f))
+                    SummaryTile("Mobile plan",
+                        if (uiState.dataLimitBytes > 0) NetworkUtils.formatBytes(
+                            (uiState.dataLimitBytes - uiState.cycleMobileBytes).coerceAtLeast(0L))
+                        else "Not set",
+                        if (uiState.dataLimitBytes > 0) "Remaining this cycle" else "Set a data limit",
+                        onOpenSettings, Modifier.weight(1f))
+                }
+            }
+        }
+        if (uiState.hasUsageAccessPermission) {
+            item(key = "daily_plan") {
+                val limit = uiState.dailyDataLimitBytes
+                val remaining = (limit - uiState.dailyUsage.totalMobileBytes).coerceAtLeast(0L)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryTile("Daily allowance", if (limit > 0) NetworkUtils.formatBytes(remaining) else "Not set",
+                        if (limit > 0) "Remaining today" else "Configure in settings", onOpenSettings, Modifier.weight(1f))
+                    SummaryTile("App usage", "By app", "See top consumers", onNavigateToApps, Modifier.weight(1f))
+                }
+            }
+        }
+        if (uiState.hasUsageAccessPermission) {
+            item(key = "top_apps") { TopAppsTodayCard(isVisible, onNavigateToApps) }
+            if (uiState.dailyDataLimitBytes > 0) item(key = "daily_limit_progress") {
+                val used = uiState.dailyUsage.totalMobileBytes
+                val limit = uiState.dailyDataLimitBytes
+                Card(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Daily mobile plan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(NetworkUtils.formatBytes(used) + " of " + NetworkUtils.formatBytes(limit), style = MaterialTheme.typography.bodyMedium)
+                        LinearProgressIndicator(progress = { (used.toDouble() / limit).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape))
+                        Text(if (used >= limit) "Daily allowance reached" else NetworkUtils.formatBytes(limit - used) + " remaining", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
         // 2. OVERNIGHT RESILIENCE ADVISORY (Shown when battery is still restricted / optimized)
         if (!uiState.isBatteryOptimizationIgnored) {
             item(key = "battery_optimization_advisory") {
@@ -172,47 +235,6 @@ fun DashboardTab(
             }
         }
 
-        // 3. COMPACT TODAY'S DATA CONSUMPTION CARD
-        item(key = "today_consumption") {
-            TodayConsumptionCard(
-                hasPermission = uiState.hasUsageAccessPermission,
-                mobileBytes = uiState.dailyUsage.mobileRxBytes + uiState.dailyUsage.mobileTxBytes,
-                wifiBytes = uiState.dailyUsage.wifiRxBytes + uiState.dailyUsage.wifiTxBytes,
-                mobileFormatted = uiState.dailyUsage.formattedMobile,
-                wifiFormatted = uiState.dailyUsage.formattedWifi,
-                totalFormatted = uiState.dailyUsage.formattedTotal,
-                onRequestPermission = onRequestUsageAccess
-            )
-        }
-        if (uiState.hasUsageAccessPermission) {
-            item(key = "usage_summary") {
-                val month = LocalDate.now().toString().take(7)
-                val monthRecords = uiState.recentDailyRecords.filter { it.date.startsWith(month) }
-                val mobile = monthRecords.sumOf { it.totalMobileBytes }
-                val wifi = monthRecords.sumOf { it.totalWifiBytes }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryTile("Month to date", NetworkUtils.formatBytes(mobile + wifi),
-                        "${monthRecords.size} recorded days", onNavigateToUsage, Modifier.weight(1f))
-                    SummaryTile("Mobile plan",
-                        if (uiState.dataLimitBytes > 0) NetworkUtils.formatBytes(
-                            (uiState.dataLimitBytes - uiState.cycleMobileBytes).coerceAtLeast(0L))
-                        else "Not set",
-                        if (uiState.dataLimitBytes > 0) "Remaining this cycle" else "Set a data limit",
-                        onOpenSettings, Modifier.weight(1f))
-                }
-            }
-        }
-        if (uiState.hasUsageAccessPermission) {
-            item(key = "daily_plan") {
-                val limit = uiState.dailyDataLimitBytes
-                val remaining = (limit - uiState.dailyUsage.totalMobileBytes).coerceAtLeast(0L)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryTile("Daily allowance", if (limit > 0) NetworkUtils.formatBytes(remaining) else "Not set",
-                        if (limit > 0) "Remaining today" else "Configure in settings", onOpenSettings, Modifier.weight(1f))
-                    SummaryTile("App usage", "By app", "See top consumers", onNavigateToApps, Modifier.weight(1f))
-                }
-            }
-        }
         com.ayush.netpulse.util.DashboardOrder.parse(preferences.getString("dashboard_order", null)).forEach { key ->
             when (key) {
                 "usage_insights" -> if (preferences.getBoolean("insights_card", true)) item(key = key) {
@@ -262,14 +284,14 @@ private fun LiveSpeedHeroCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(24.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(24.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
+                .padding(16.dp)
         ) {
             // Top Row: Network Connection Badge on Left, Small Discoverable Monitoring Toggle on Right
             Row(
@@ -319,7 +341,7 @@ private fun LiveSpeedHeroCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Main Telemetry Area: Prominent Download Speed as Primary Visual Anchor
             Row(
@@ -662,6 +684,12 @@ private fun SummaryTile(title: String, value: String, detail: String, onClick: (
     Card(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(when (title) {
+                "Month to date" -> Icons.Default.DateRange
+                "App usage" -> Icons.Default.Apps
+                "Usage history", "Speed logs" -> Icons.Default.History
+                else -> Icons.Default.DataUsage
+            }, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary)
