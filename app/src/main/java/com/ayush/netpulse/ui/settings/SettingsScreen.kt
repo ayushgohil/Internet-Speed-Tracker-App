@@ -38,6 +38,14 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.ayush.netpulse.BuildConfig
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -102,6 +110,10 @@ fun SettingsScreen(
 ) {
     var showSpeedLogs by rememberSaveable { mutableStateOf(initialOpenSpeedLogs) }
 
+    var category by rememberSaveable { mutableStateOf(if (initialOpenSpeedLogs) "advanced" else "home") }
+    BackHandler(enabled = showSpeedLogs || category != "home") {
+        if (showSpeedLogs) showSpeedLogs = false else category = "home"
+    }
     if (showSpeedLogs) {
         LogsTab(
             records = uiState.recentRecords,
@@ -144,7 +156,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = onBack,
+                    onClick = { if (category == "home") onBack() else category = "home" },
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
@@ -160,7 +172,7 @@ fun SettingsScreen(
                 }
                 Spacer(modifier = Modifier.width(14.dp))
                 Text(
-                    text = "Settings",
+                    text = when (category) { "appearance" -> "Appearance"; "monitoring" -> "Monitoring & notifications"; "custom" -> "Widget & dashboard"; "limits" -> "Data plans"; "permissions" -> "Permissions & battery"; "storage" -> "History & storage"; "advanced" -> "Diagnostics & logs"; "about" -> "About"; else -> "Settings" },
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold
@@ -168,8 +180,34 @@ fun SettingsScreen(
             }
         }
 
+        if (category == "home") {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), shape = RoundedCornerShape(20.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Speed, null, modifier = Modifier.size(36.dp))
+                        Column {
+                            Text("NetPulse", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Version ${BuildConfig.VERSION_NAME} · " + if (uiState.isBackgroundServiceRunning) "Monitoring active" else "Monitoring paused", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+            item {
+                PreferenceGroup {
+                    SettingsCategoryRow("Appearance", "Light, dark and system theme", Icons.Default.Palette) { category = "appearance" }
+                    SettingsCategoryRow("Monitoring & notifications", "Speed units, status bar and refresh", Icons.Default.Notifications) { category = "monitoring" }
+                    SettingsCategoryRow("Widget & dashboard", "Floating speed and card order", Icons.Default.Layers) { category = "custom" }
+                    SettingsCategoryRow("Data plans", "Daily and monthly allowances", Icons.Default.Analytics) { category = "limits" }
+                    SettingsCategoryRow("Permissions & battery", "Access and background reliability", Icons.Default.Security) { category = "permissions" }
+                    SettingsCategoryRow("History & storage", "Retention and reconciliation", Icons.Default.Storage) { category = "storage" }
+                    SettingsCategoryRow("Diagnostics & logs", "Service health and speed samples", Icons.Default.Build) { category = "advanced" }
+                    SettingsCategoryRow("About", "Version and privacy", Icons.Default.Info) { category = "about" }
+                }
+            }
+        }
+
         // 1. APPEARANCE
-        item {
+        if (category == "appearance") item {
             SectionHeader(title = "Appearance")
             PreferenceGroup {
                 PreferenceClickableRow(
@@ -185,7 +223,7 @@ fun SettingsScreen(
         }
 
         // 2. MONITORING
-        item {
+        if (category == "monitoring") item {
             SectionHeader(title = "Monitoring")
             PreferenceGroup {
                 // Background Monitoring Toggle
@@ -253,10 +291,10 @@ fun SettingsScreen(
             }
         }
 
-        item { CustomizationSettings() }
+        if (category == "custom") item { CustomizationSettings() }
 
         // DATA LIMIT
-        item {
+        if (category == "limits") item {
             SectionHeader(title = "Data limit")
             PreferenceGroup {
                 PreferenceClickableRow(
@@ -322,7 +360,7 @@ fun SettingsScreen(
         }
 
         // 3. PERMISSIONS & BATTERY
-        item {
+        if (category == "permissions") item {
             SectionHeader(title = "Permissions & Battery")
             PreferenceGroup {
                 if (allPermissionsReady) {
@@ -467,7 +505,7 @@ fun SettingsScreen(
         }
 
         // 4. HISTORY & STORAGE
-        item {
+        if (category == "storage") item {
             SectionHeader(title = "History & Storage")
             PreferenceGroup {
                 PreferenceClickableRow(
@@ -529,7 +567,7 @@ fun SettingsScreen(
         }
 
         // 5. ADVANCED
-        item {
+        if (category == "advanced") item {
             SectionHeader(title = "Advanced")
             PreferenceGroup {
                 // Diagnostics entry
@@ -615,7 +653,7 @@ fun SettingsScreen(
         }
 
         // 6. ABOUT
-        item {
+        if (category == "about") item {
             SectionHeader(title = "About")
             PreferenceGroup {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -643,7 +681,7 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Version 1.0.0",
+                                text = "Version ${BuildConfig.VERSION_NAME}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -669,7 +707,7 @@ fun SettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "100% Local & Offline",
+                                    text = "Local-first privacy",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
@@ -677,7 +715,7 @@ fun SettingsScreen(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "All network metrics and data statistics are processed locally on your device. Zero tracking, zero telemetry servers, and complete offline privacy.",
+                                text = "Passive monitoring stays on your device. Optional network tests contact Cloudflare, and discovery sends local network queries. No account or telemetry is required.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 16.sp
@@ -1485,4 +1523,20 @@ private fun DiagRow(label: String, value: String, valueColor: Color = MaterialTh
             fontWeight = FontWeight.Medium
         )
     }
+}
+
+@Composable
+private fun SettingsCategoryRow(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
 }

@@ -1,6 +1,22 @@
 package com.ayush.netpulse.ui.tools
 
 import androidx.compose.foundation.layout.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -21,11 +37,16 @@ import java.util.Locale
 
 @Composable
 fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSettings: () -> Unit) {
+    var page by rememberSaveable { mutableStateOf("home") }
+    BackHandler(enabled = isVisible && page != "home") { page = "home" }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val events by ConnectionHistory.events.collectAsState()
     var active by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
+    var progress by remember { mutableStateOf(0f) }
+    var phase by remember { mutableStateOf("Ready") }
+    var measured by remember { mutableStateOf(0.0) }
     var speed by remember { mutableStateOf<String?>(null) }
     var latency by remember { mutableStateOf<String?>(null) }
     var dns by remember { mutableStateOf<String?>(null) }
@@ -39,6 +60,9 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
     LaunchedEffect(isVisible) {
         if (isVisible) ConnectionHistory.load(context) else job?.cancel()
     }
+    LaunchedEffect(page) { job?.cancel(); error = null }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(page) { listState.scrollToItem(0) }
     fun runTest(name: String, block: suspend () -> Unit) {
         if (active != null) return
         active = name
@@ -47,24 +71,50 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
             try { block() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = "$name failed. Check your connection or try again." }
-            finally { active = null }
+            finally { if (name == "Speed test" && phase != "Completed") phase = if (error != null) "Failed" else "Stopped"; active = null }
         }
     }
     fun format(value: Double?) = value?.let { String.format(Locale.US, "%.1f", it) } ?: "Unavailable"
     val outages = events.count { it.state == "Disconnected" || it.state.endsWith("Unvalidated") || it.state.endsWith("Sign-in required") }
     val shown = if (onlyOutages) events.filter { it.state == "Disconnected" || it.state.endsWith("Unvalidated") || it.state.endsWith("Sign-in required") } else events
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp),
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), state = listState,
         contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            Text("Network tools", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("Active tests are optional and contact speed.cloudflare.com. Normal monitoring remains local.",
-                style = MaterialTheme.typography.bodySmall)
+        if (page == "home") {
+            item {
+                Text("Network tools", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Test, inspect and manage your connection.", style = MaterialTheme.typography.bodyMedium)
+            }
+            item {
+                Card(onClick = { page = "speed" }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), shape = RoundedCornerShape(24.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Default.Speed, null, modifier = Modifier.size(44.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Internet speed test", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Measure download and upload", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+            item { Text("Network diagnostics", style = MaterialTheme.typography.titleMedium) }
+            item { ToolGrid(listOf(ToolDestination("latency", "Latency", "TCP response", Icons.Default.Speed), ToolDestination("dns", "DNS lookup", "Name resolution", Icons.Default.Search), ToolDestination("wifi", "Wi-Fi analyzer", "Channels and signal", Icons.Default.Wifi), ToolDestination("cellular", "Cellular", "SIM and radio", Icons.Default.CellTower), ToolDestination("devices", "Local devices", "Advertised services", Icons.Default.Share), ToolDestination("connection", "Connection log", "Network events", Icons.Default.History))) { page = it } }
+            item { Text("Data and monitoring", style = MaterialTheme.typography.titleMedium) }
+            item { ToolGrid(listOf(ToolDestination("tests", "Test history", "Saved results", Icons.Default.History), ToolDestination("export", "Export data", "CSV and JSON", Icons.Default.Share), ToolDestination("backup", "Backup", "Save and restore", Icons.Default.Storage), ToolDestination("details", "Network details", "Current connection", Icons.Default.Info), ToolDestination("diagnostics", "Diagnostics", "Service health", Icons.Default.Build))) { page = it } }
+        } else item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { page = "home" }) { Icon(Icons.Default.ArrowBack, "Back to tools") }
+                Text(when (page) {
+                    "speed" -> "Speed test"; "latency" -> "Latency"; "dns" -> "DNS lookup"; "wifi" -> "Wi-Fi analyzer"
+                    "cellular" -> "Cellular"; "devices" -> "Local devices"; "connection" -> "Connection history"
+                    "tests" -> "Test history"; "export" -> "Export data"; "backup" -> "Backup"; "details" -> "Network details"; else -> "Diagnostics"
+                }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            }
         }
-        item {
+        if (page == "speed") item {
+            SpeedGauge(phase, measured, progress, active == "Speed test")
             ToolCard("Internet speed test", "Estimate transfer throughput using a bounded 5 MB download and 1 MB upload. Short tests may underestimate fast connections.",
                 speed, "Run test", active == null) { confirmSpeed = true }
         }
-        item {
+        if (page == "latency") item {
             ToolCard("TCP latency", "Five TCP connection attempts to Cloudflare. Reports latency, variation and failed attempts; not ICMP ping.",
                 latency, "Measure latency", active == null) {
                 latency = null
@@ -74,7 +124,7 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
                 }
             }
         }
-        item {
+        if (page == "dns") item {
             ToolCard("DNS lookup", "Resolve the test hostname using the device resolver. Results may be cached.",
                 dns, "Resolve", active == null) {
                 dns = null
@@ -92,7 +142,7 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
             }
         }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
-        item {
+        if (page == "tests") item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Speed test history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -113,13 +163,13 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
                 }
             }
         }
-        item { WifiAnalyzerCard() }
-        item { CellularDetailsCard() }
-        item { LocalDeviceDiscoveryCard(isVisible) }
-        item { DataExportCard(uiState, events, testHistory) }
-        item { UsageBackupCard(uiState.hasUsageAccessPermission) }
-        item { NetworkDetailsCard(uiState.networkType) }
-        item {
+        if (page == "wifi") item { WifiAnalyzerCard() }
+        if (page == "cellular") item { CellularDetailsCard() }
+        if (page == "devices") item { LocalDeviceDiscoveryCard(isVisible) }
+        if (page == "export") item { DataExportCard(uiState, events, testHistory) }
+        if (page == "backup") item { UsageBackupCard(uiState.hasUsageAccessPermission) }
+        if (page == "details") item { NetworkDetailsCard(uiState.networkType) }
+        if (page == "connection") item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Connection history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -134,8 +184,8 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
                 }
             }
         }
-        if (shown.isEmpty()) item { Text("No matching connection events recorded.") }
-        items(shown) { event ->
+        if (page == "connection" && shown.isEmpty()) item { Text("No matching connection events recorded.") }
+        if (page == "connection") items(shown) { event ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
                     Text(event.state, fontWeight = FontWeight.SemiBold)
@@ -145,7 +195,7 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
                 }
             }
         }
-        item {
+        if (page == "diagnostics") item {
             ToolCard("Monitoring diagnostics", "Check service status, permissions, and recovery details.",
                 uiState.diagnosticsInfo.resolvedServiceStatus, "Open settings", true, onOpenSettings)
         }
@@ -156,9 +206,19 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
         confirmButton = { TextButton(onClick = {
             confirmSpeed = false
             speed = null
+            progress = 0f
+            measured = 0.0
+            phase = "Connecting"
             runTest("Speed test") {
                 val network = uiState.networkType.displayName
-                val result = NetworkTests.speed()
+                val result = NetworkTests.speed { step, value, fraction ->
+                    phase = step
+                    measured = value
+                    progress = fraction
+                }
+                phase = "Completed"
+                measured = result.downloadMbps
+                progress = 1f
                 testHistory = SpeedTestHistory.add(context, SpeedTestHistory.Entry(System.currentTimeMillis(), result.downloadMbps, result.uploadMbps, network))
                 speed = "Download: ${format(result.downloadMbps)} Mbps\nUpload: ${format(result.uploadMbps)} Mbps"
             }
@@ -186,6 +246,61 @@ private fun ToolCard(title: String, description: String, result: String?, action
             Text(description, style = MaterialTheme.typography.bodySmall)
             result?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium) }
             OutlinedButton(onClick = onClick, enabled = enabled) { Text(action) }
+        }
+    }
+}
+
+private data class ToolDestination(val id: String, val title: String, val subtitle: String, val icon: ImageVector)
+
+@Composable
+private fun ToolGrid(destinations: List<ToolDestination>, onSelect: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        destinations.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { tool ->
+                    Card(onClick = { onSelect(tool.id) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(tool.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                            Text(tool.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(tool.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeedGauge(phase: String, measured: Double, progress: Float, running: Boolean) {
+    val primary = MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.outline.copy(alpha = .2f)
+    val value by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = (measured / 100.0).coerceIn(0.0, 1.0).toFloat(),
+        animationSpec = androidx.compose.animation.core.tween(250), label = "speedGauge")
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                    val stroke = 12.dp.toPx()
+                    val inset = stroke / 2
+                    val bounds = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                    val origin = androidx.compose.ui.geometry.Offset(inset, inset)
+                    val style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    drawArc(track, 140f, 260f, false, origin, bounds, style = style)
+                    drawArc(primary, 140f, 260f * value, false, origin, bounds, style = style)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(phase, style = MaterialTheme.typography.labelLarge)
+                    Text(String.format(Locale.US, "%.1f", measured), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                    Text("Mbps", style = MaterialTheme.typography.bodyMedium)
+                    Text("Gauge scale 0–100+", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            if (running) LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+            Text("Short transfer estimate · about 6 MB", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
