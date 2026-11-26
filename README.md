@@ -75,7 +75,7 @@ Passive monitoring is computed on your device. No account or analytics is requir
 - Installed application icons, ranked usage, search, and dedicated app detail views.
 - Interactive stacked usage charts and calendar range selection.
 - Categorized Tools and Settings destinations, measured speed test gauge, and improved loading and feedback states.
-- Existing screenshots below are from an earlier version; updated device screenshots are pending.
+- Existing screenshots below are from an earlier version; updated physical-device screenshots are pending. The UI acceptance workflow produces emulator screenshots and reports for review.
 
 ### Apps, tools and customization
 - Per-app UID-based usage, search and network/date filters; Android can group or hide app identities.

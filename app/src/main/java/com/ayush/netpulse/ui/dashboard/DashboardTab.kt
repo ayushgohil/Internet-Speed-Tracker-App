@@ -48,8 +48,11 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -108,8 +111,8 @@ fun DashboardTab(
         // 1. UNIFIED LIVE NETWORK ACTIVITY HERO
         item(key = "live_speed_hero") {
             LiveSpeedHeroCard(
-                downloadFormatted = uiState.liveSpeed.formattedDownload,
-                uploadFormatted = uiState.liveSpeed.formattedUpload,
+                downloadBytes = uiState.liveSpeed.downloadBytesPerSec,
+                uploadBytes = uiState.liveSpeed.uploadBytesPerSec,
                 networkType = uiState.networkType,
                 isMonitoringRunning = uiState.isBackgroundServiceRunning,
                 onToggleMonitoring = onToggleBackgroundService,
@@ -271,8 +274,8 @@ fun DashboardTab(
  */
 @Composable
 private fun LiveSpeedHeroCard(
-    downloadFormatted: String,
-    uploadFormatted: String,
+    downloadBytes: Long,
+    uploadBytes: Long,
     networkType: NetworkType,
     isMonitoringRunning: Boolean,
     onToggleMonitoring: () -> Unit,
@@ -308,7 +311,6 @@ private fun LiveSpeedHeroCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { onToggleMonitoring() }
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     val dotColor by animateColorAsState(
@@ -336,7 +338,7 @@ private fun LiveSpeedHeroCard(
                             uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
-                        modifier = Modifier.scale(0.85f)
+                        modifier = Modifier.semantics { contentDescription = "Background monitoring" }
                     )
                 }
             }
@@ -380,7 +382,7 @@ private fun LiveSpeedHeroCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = downloadFormatted,
+                        text = animatedSpeedLabel(downloadBytes, animateGraph),
                         style = MaterialTheme.typography.headlineLarge,
                         color = npColors.download,
                         fontWeight = FontWeight.Bold,
@@ -422,7 +424,7 @@ private fun LiveSpeedHeroCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = uploadFormatted,
+                        text = animatedSpeedLabel(uploadBytes, animateGraph),
                         style = MaterialTheme.typography.headlineMedium,
                         color = npColors.upload,
                         fontWeight = FontWeight.SemiBold,
@@ -698,3 +700,23 @@ private fun SummaryTile(title: String, value: String, detail: String, onClick: (
     }
 }
 
+
+/** Display-only interpolation; samples, logs and notification values remain unchanged. */
+@Composable
+private fun animatedSpeedLabel(bytes: Long, animate: Boolean): String {
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var resumed by androidx.compose.runtime.remember(owner) { androidx.compose.runtime.mutableStateOf(owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ -> resumed = owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    val enabled = animate && resumed
+    val target = bytes.coerceAtLeast(0).toFloat()
+    val value = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(target) }
+    androidx.compose.runtime.LaunchedEffect(target, enabled) {
+        if (enabled) value.animateTo(target, androidx.compose.animation.core.tween(300))
+        else value.snapTo(target)
+    }
+    return NetworkUtils.formatSpeed(if (enabled) value.value.toLong() else bytes.coerceAtLeast(0))
+}
