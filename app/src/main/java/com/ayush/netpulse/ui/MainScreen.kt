@@ -196,18 +196,6 @@ fun MainScreen(
                                 }
                             }
                         },
-                        actions = {
-                            IconButton(onClick = {
-                                openSettingsDirectlyToLogs = false
-                                isSettingsOpen = true
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.background
                         )
@@ -256,6 +244,7 @@ fun MainScreen(
                 when (screens[page]) {
                     NavScreen.OVERVIEW -> {
                         DashboardTab(
+                            isVisible = pagerState.currentPage == NavScreen.OVERVIEW.ordinal,
                             uiState = uiState,
                             onToggleMonitoring = onToggleMonitoring,
                             onToggleBackgroundService = onToggleBackgroundService,

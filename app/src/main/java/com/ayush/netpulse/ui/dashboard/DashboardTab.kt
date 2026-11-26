@@ -72,7 +72,8 @@ fun DashboardTab(
     onRequestUsageAccess: () -> Unit = {},
     onRequestBatteryOptimization: () -> Unit = {},
     onRefresh: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isVisible: Boolean = true
 ) {
     val preferences = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("netpulse_overlay", android.content.Context.MODE_PRIVATE)
     val npColors = LocalNetPulseColors.current
@@ -105,7 +106,8 @@ fun DashboardTab(
                 networkType = uiState.networkType,
                 isMonitoringRunning = uiState.isBackgroundServiceRunning,
                 onToggleMonitoring = onToggleBackgroundService,
-                history = uiState.liveSpeedHistory
+                history = uiState.liveSpeedHistory,
+                animateGraph = isVisible && uiState.isMonitoringActive && uiState.networkType != NetworkType.DISCONNECTED
             )
         }
 
@@ -252,7 +254,8 @@ private fun LiveSpeedHeroCard(
     networkType: NetworkType,
     isMonitoringRunning: Boolean,
     onToggleMonitoring: () -> Unit,
-    history: List<LiveSpeed>
+    history: List<LiveSpeed>,
+    animateGraph: Boolean
 ) {
     val npColors = LocalNetPulseColors.current
 
@@ -408,7 +411,7 @@ private fun LiveSpeedHeroCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            LiveSpeedChart(history = history)
+            SmoothLiveSpeedChart(history, animateGraph)
             Spacer(modifier = Modifier.height(12.dp))
 
             // Subdued metadata footer
@@ -667,43 +670,3 @@ private fun SummaryTile(title: String, value: String, detail: String, onClick: (
     }
 }
 
-@Composable
-private fun LiveSpeedChart(history: List<LiveSpeed>) {
-    val colors = LocalNetPulseColors.current
-    val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-    val peak = history.maxOfOrNull { maxOf(it.downloadBytesPerSec, it.uploadBytesPerSec) } ?: 0L
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("Recent live samples", style = MaterialTheme.typography.labelMedium)
-        Text("Peak: " + NetworkUtils.formatSpeed(peak), style = MaterialTheme.typography.labelSmall)
-    }
-    Spacer(Modifier.height(8.dp))
-    if (history.size < 2) {
-        Text("Collecting speed samples…", style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return
-    }
-    Canvas(Modifier.fillMaxWidth().height(84.dp)) {
-        repeat(3) { i ->
-            val y = size.height * i / 2f
-            drawLine(grid, Offset(0f, y), Offset(size.width, y))
-        }
-        val end = history.last().timestamp
-        val start = end - 60_000L
-        val scale = peak.coerceAtLeast(1L).toDouble()
-        fun series(value: (LiveSpeed) -> Long, color: Color) {
-            val path = Path()
-            history.forEachIndexed { index, sample ->
-                val x = ((sample.timestamp - start) / 60_000f).coerceIn(0f, 1f) * size.width
-                val y = size.height * (1f - (value(sample) / scale).toFloat().coerceIn(0f, 1f))
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(path, color, style = Stroke(width = 2.dp.toPx()))
-        }
-        series({ it.downloadBytesPerSec }, colors.download)
-        series({ it.uploadBytesPerSec }, colors.upload)
-    }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("60s ago", style = MaterialTheme.typography.labelSmall)
-        Text("Latest sample", style = MaterialTheme.typography.labelSmall)
-    }
-}
