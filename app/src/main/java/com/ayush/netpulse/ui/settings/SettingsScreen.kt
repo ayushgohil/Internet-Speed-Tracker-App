@@ -251,6 +251,8 @@ fun SettingsScreen(
             }
         }
 
+        item { CustomizationSettings() }
+
         // DATA LIMIT
         item {
             SectionHeader(title = "Data limit")

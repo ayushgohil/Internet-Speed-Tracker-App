@@ -50,6 +50,7 @@ class SpeedTrackerService : Service() {
     private lateinit var notificationManager: NotificationManager
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var powerManager: PowerManager
+    private lateinit var floatingOverlay: FloatingSpeedOverlay
 
     private var lastNotificationSignature: String = ""
 
@@ -58,6 +59,7 @@ class SpeedTrackerService : Service() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         preferencesManager = PreferencesManager.getInstance(this)
         powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        floatingOverlay = FloatingSpeedOverlay(this)
         createNotificationChannel()
         Log.d(TAG, "SpeedTrackerService onCreate")
     }
@@ -189,6 +191,7 @@ class SpeedTrackerService : Service() {
                 val loopIterationStart = System.currentTimeMillis()
                 try {
                     val isScreenInteractive = powerManager.isInteractive
+                    com.ayush.netpulse.util.ScreenUsageTracker.sample(applicationContext, isScreenInteractive)
                     val isOffline = (currentNetworkType == NetworkType.DISCONNECTED)
                     val now = loopIterationStart
 
@@ -198,6 +201,7 @@ class SpeedTrackerService : Service() {
                         repository.sampleCurrentSpeed()
                     }
                     _liveSpeedState.value = speed
+                    floatingOverlay.update(speed, isScreenInteractive && !((getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked))
 
                     // Throttled SharedPreferences persistence: Avoid writing to flash memory every 1-2.5s all night
                     if (now - lastPrefsWriteTimestamp >= 30000L || (!isOffline && (speed.downloadBytesPerSec > 0 || speed.uploadBytesPerSec > 0))) {
@@ -415,6 +419,9 @@ class SpeedTrackerService : Service() {
 
         com.ayush.netpulse.util.ConnectionHistory.stop(applicationContext)
 
+        com.ayush.netpulse.util.ScreenUsageTracker.stop(applicationContext)
+        floatingOverlay.update(LiveSpeed(), false)
+
         // User turned tracking off: no more wake-ups, retries or resume prompts.
         ServiceRevival.unregisterNetworkWakeup(this)
         ServiceRevival.cancelResumePrompt(this)
@@ -576,6 +583,8 @@ class SpeedTrackerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        com.ayush.netpulse.util.ScreenUsageTracker.stop(applicationContext)
+        floatingOverlay.close()
         com.ayush.netpulse.util.ConnectionHistory.stop(applicationContext)
         val now = System.currentTimeMillis()
         preferencesManager.lastServiceDestroyTimestamp = now

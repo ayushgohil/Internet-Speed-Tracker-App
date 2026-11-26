@@ -30,6 +30,9 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
     var latency by remember { mutableStateOf<String?>(null) }
     var dns by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var testHistory by remember { mutableStateOf(SpeedTestHistory.read(context)) }
+    var confirmClearTests by remember { mutableStateOf(false) }
+    var showAllTests by remember { mutableStateOf(false) }
     var confirmSpeed by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var onlyOutages by remember { mutableStateOf(false) }
@@ -89,6 +92,27 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
             }
         }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Speed test history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${testHistory.size} saved results · up to 50 on this device", style = MaterialTheme.typography.bodySmall)
+                    if (testHistory.isEmpty()) Text("Complete a speed test to save a result.")
+                    (if (showAllTests) testHistory else testHistory.take(3)).forEach { entry ->
+                        HorizontalDivider()
+                        Text(DateFormat.getDateTimeInstance().format(Date(entry.timestamp)) + " · " + entry.network,
+                            style = MaterialTheme.typography.labelSmall)
+                        Text("↓ ${format(entry.download)} Mbps   ↑ ${format(entry.upload)} Mbps")
+                    }
+                    Row {
+                        if (testHistory.size > 3) TextButton(onClick = { showAllTests = !showAllTests }) {
+                            Text(if (showAllTests) "Show less" else "Show all")
+                        }
+                        TextButton(onClick = { confirmClearTests = true }, enabled = testHistory.isNotEmpty()) { Text("Clear") }
+                    }
+                }
+            }
+        }
         item { NetworkDetailsCard(uiState.networkType) }
         item {
             Card(Modifier.fillMaxWidth()) {
@@ -128,10 +152,21 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
             confirmSpeed = false
             speed = null
             runTest("Speed test") {
+                val network = uiState.networkType.displayName
                 val result = NetworkTests.speed()
+                testHistory = SpeedTestHistory.add(context, SpeedTestHistory.Entry(System.currentTimeMillis(), result.downloadMbps, result.uploadMbps, network))
                 speed = "Download: ${format(result.downloadMbps)} Mbps\nUpload: ${format(result.uploadMbps)} Mbps"
             }
         }) { Text("Start") } }, dismissButton = { TextButton(onClick = { confirmSpeed = false }) { Text("Cancel") } })
+    if (confirmClearTests) AlertDialog(onDismissRequest = { confirmClearTests = false },
+        title = { Text("Clear speed test history?") },
+        text = { Text("Saved speed test results will be removed from this device.") },
+        confirmButton = { TextButton(onClick = {
+            SpeedTestHistory.clear(context)
+            testHistory = emptyList()
+            confirmClearTests = false
+        }) { Text("Clear") } },
+        dismissButton = { TextButton(onClick = { confirmClearTests = false }) { Text("Cancel") } })
     if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false },
         title = { Text("Clear connection history?") }, text = { Text("Only connection events will be removed.") },
         confirmButton = { TextButton(onClick = { ConnectionHistory.clear(context); confirmClear = false }) { Text("Clear") } },
