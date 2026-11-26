@@ -110,21 +110,34 @@ internal fun WifiAnalyzerCard() {
 @Composable
 internal fun CellularDetailsCard() {
     val context = LocalContext.current
-    var details by remember { mutableStateOf("Tap refresh to inspect the default cellular subscription.") }
+    var details by remember { mutableStateOf("Tap refresh to inspect active cellular subscriptions.") }
     fun read() {
         details = try {
             val manager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-            val tech = when (manager.dataNetworkType) {
-                TelephonyManager.NETWORK_TYPE_NR -> "5G NR"
-                TelephonyManager.NETWORK_TYPE_LTE -> "4G LTE"
-                TelephonyManager.NETWORK_TYPE_HSPAP, TelephonyManager.NETWORK_TYPE_HSPA,
-                TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
-                TelephonyManager.NETWORK_TYPE_EDGE, TelephonyManager.NETWORK_TYPE_GPRS -> "2G"
-                TelephonyManager.NETWORK_TYPE_UNKNOWN -> "Unknown"
-                else -> "Other (${manager.dataNetworkType})"
+            val subscriptions = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as android.telephony.SubscriptionManager
+            val active = subscriptions.activeSubscriptionInfoList.orEmpty().sortedBy { it.simSlotIndex }
+            val defaultId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+            fun describe(phone: TelephonyManager): String {
+                val type = phone.dataNetworkType
+                val tech = when (type) {
+                    TelephonyManager.NETWORK_TYPE_NR -> "5G NR"
+                    TelephonyManager.NETWORK_TYPE_LTE -> "4G LTE"
+                    TelephonyManager.NETWORK_TYPE_HSPAP, TelephonyManager.NETWORK_TYPE_HSPA,
+                    TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
+                    TelephonyManager.NETWORK_TYPE_EDGE, TelephonyManager.NETWORK_TYPE_GPRS -> "2G"
+                    TelephonyManager.NETWORK_TYPE_UNKNOWN -> "Unknown"
+                    else -> "Other ($type)"
+                }
+                val signal = if (android.os.Build.VERSION.SDK_INT >= 28) phone.signalStrength?.level else null
+                return "Operator: ${phone.networkOperatorName.ifBlank { "Unavailable" }}\nRadio: $tech\nSignal level: ${signal?.let { "$it / 4" } ?: "Unavailable"}"
             }
-            val signal = if (android.os.Build.VERSION.SDK_INT >= 28) manager.signalStrength?.level else null
-            "Operator: ${manager.networkOperatorName.ifBlank { "Unavailable" }}\nRadio: $tech\nSignal level: ${signal?.let { "$it / 4" } ?: "Unavailable"}"
+            if (active.isEmpty()) "No active subscriptions visible.\n" + describe(manager)
+            else active.joinToString("\n\n") { sub ->
+                val label = "SIM ${sub.simSlotIndex + 1}" + if (sub.subscriptionId == defaultId) " · Default data" else ""
+                val info = try { describe(manager.createForSubscriptionId(sub.subscriptionId)) }
+                    catch (_: Exception) { "Radio details unavailable" }
+                "$label\nCarrier: ${sub.carrierName}\n$info"
+            }
         } catch (_: Exception) { "Cellular information unavailable or restricted." }
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -134,7 +147,7 @@ internal fun CellularDetailsCard() {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Cellular information", style = MaterialTheme.typography.titleMedium)
             Text(details)
-            Text("Default subscription only. Non-standalone 5G can report LTE; this is not a definitive 5G indicator.",
+            Text("Android may hide subscriptions or radio details. Non-standalone 5G can report LTE. Usage totals are not split by SIM.",
                 style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) read()

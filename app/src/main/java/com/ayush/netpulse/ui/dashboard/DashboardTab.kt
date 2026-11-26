@@ -211,16 +211,20 @@ fun DashboardTab(
                 }
             }
         }
-        if (preferences.getBoolean("insights_card", true)) item(key = "usage_insights") {
-            UsageInsightsCard(uiState)
-        }
-        if (preferences.getBoolean("network_card", true)) item(key = "network_details") {
-            com.ayush.netpulse.ui.dashboard.NetworkDetailsCard(uiState.networkType)
-        }
-        if (preferences.getBoolean("quick_actions", true)) item(key = "quick_actions") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryTile("Usage history", "90 days", "View trends", onNavigateToUsage, Modifier.weight(1f))
-                SummaryTile("Speed logs", "History", "Review samples", onNavigateToLogs, Modifier.weight(1f))
+        com.ayush.netpulse.util.DashboardOrder.parse(preferences.getString("dashboard_order", null)).forEach { key ->
+            when (key) {
+                "usage_insights" -> if (preferences.getBoolean("insights_card", true)) item(key = key) {
+                    UsageInsightsCard(uiState)
+                }
+                "network_details" -> if (preferences.getBoolean("network_card", true)) item(key = key) {
+                    NetworkDetailsCard(uiState.networkType)
+                }
+                "quick_actions" -> if (preferences.getBoolean("quick_actions", true)) item(key = key) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SummaryTile("Usage history", "90 days", "View trends", onNavigateToUsage, Modifier.weight(1f))
+                        SummaryTile("Speed logs", "History", "Review samples", onNavigateToLogs, Modifier.weight(1f))
+                    }
+                }
             }
         }
     }

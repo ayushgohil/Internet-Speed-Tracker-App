@@ -232,6 +232,8 @@ fun SettingsScreen(
                     title = "Notification style",
                     value = when (uiState.notificationStyle) {
                         "Detailed" -> "Detailed"
+                        "Download" -> "Download only"
+                        "Usage" -> "Usage first"
                         else -> "Minimal (compact)"
                     },
                     onClick = { showNotificationStyleDialog = true }
@@ -1099,7 +1101,9 @@ fun SettingsScreen(
                 Column {
                     listOf(
                         "Minimal" to "Minimal (Compact 2-line speed & usage)",
-                        "Detailed" to "Detailed (Expanded card with breakdown)"
+                        "Detailed" to "Detailed (Expanded card with breakdown)",
+                        "Download" to "Download only (Speed and connection)",
+                        "Usage" to "Usage first (Today’s data consumption)"
                     ).forEach { (styleKey, label) ->
                         val isSelected = uiState.notificationStyle == styleKey
                         Row(
