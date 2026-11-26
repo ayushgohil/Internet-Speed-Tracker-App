@@ -23,6 +23,9 @@ internal fun CustomizationSettings() {
     var networkCard by remember { mutableStateOf(prefs.getBoolean("network_card", true)) }
     var insightsCard by remember { mutableStateOf(prefs.getBoolean("insights_card", true)) }
     var quickActions by remember { mutableStateOf(prefs.getBoolean("quick_actions", true)) }
+    var fontSize by remember { mutableStateOf(prefs.getInt("font_size", 12).coerceIn(10, 22).toFloat()) }
+    var opacity by remember { mutableStateOf(prefs.getInt("opacity", 90).coerceIn(35, 100).toFloat()) }
+    var downloadOnly by remember { mutableStateOf(prefs.getBoolean("download_only", false)) }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -48,7 +51,17 @@ internal fun CustomizationSettings() {
                 })
             }
             Text(if (granted) "Permission granted" else "Permission not granted", style = MaterialTheme.typography.labelSmall)
-            TextButton(onClick = { prefs.edit().remove("x").remove("y").apply() }) { Text("Reset saved position (next time shown)") }
+            TextButton(onClick = { prefs.edit().remove("x").remove("y").putInt("position_revision", prefs.getInt("position_revision", 0) + 1).apply() }) { Text("Reset widget position") }
+            Text("Text size: ${fontSize.toInt()} sp")
+            Slider(value = fontSize, onValueChange = { fontSize = it }, valueRange = 10f..22f,
+                steps = 11, onValueChangeFinished = { prefs.edit().putInt("font_size", fontSize.toInt()).apply() })
+            Text("Background opacity: ${opacity.toInt()}%")
+            Slider(value = opacity, onValueChange = { opacity = it }, valueRange = 35f..100f,
+                onValueChangeFinished = { prefs.edit().putInt("opacity", opacity.toInt()).apply() })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Download only")
+                Switch(downloadOnly, { downloadOnly = it; prefs.edit().putBoolean("download_only", it).apply() })
+            }
             HorizontalDivider()
             Text("Dashboard cards", style = MaterialTheme.typography.titleMedium)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

@@ -30,6 +30,21 @@ internal fun UsageInsightsCard(uiState: DashboardUiState) {
             } else {
                 Text("Daily comparisons require usage access and recorded history.", style = MaterialTheme.typography.bodySmall)
             }
+            if (uiState.hasUsageAccessPermission) {
+                val todayDate = LocalDate.now()
+                val complete = uiState.recentDailyRecords.filter {
+                    it.date >= todayDate.minusDays(7).toString() && it.date < todayDate.toString()
+                }
+                if (complete.size >= 3) {
+                    val avg = complete.map { it.totalMobileBytes }.average()
+                    Text("Recent mobile average: " + NetworkUtils.formatBytes(avg.toLong()) + " / recorded day")
+                    if (uiState.dailyDataLimitBytes > 0 && avg > uiState.dailyDataLimitBytes) {
+                        Text("Recent average exceeds your daily allowance.", color = MaterialTheme.colorScheme.error)
+                    }
+                    Text("Estimated next 7 days: " + NetworkUtils.formatBytes((avg * 7).toLong()) +
+                        " mobile data if usage stays similar.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
             HorizontalDivider()
             Text("Screen-state traffic · today", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

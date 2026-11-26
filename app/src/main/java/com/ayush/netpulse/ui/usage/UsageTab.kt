@@ -125,6 +125,9 @@ fun UsageTab(
 ) {
     var selectedFilter by remember { mutableStateOf(UsageFilterType.TOTAL) }
     var trendDays by rememberSaveable { mutableStateOf(30) }
+    var customStart by rememberSaveable { mutableStateOf("") }
+    var customEnd by rememberSaveable { mutableStateOf("") }
+    var showCustomRange by remember { mutableStateOf(false) }
     var selectedDayDetail by remember { mutableStateOf<DayHeatmapCell?>(null) }
 
     // Precompute 90-day sequence only when DB records change
@@ -320,11 +323,19 @@ fun UsageTab(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(7, 30, 90).forEach { days ->
-                        FilterChip(selected = trendDays == days, onClick = { trendDays = days },
+                        FilterChip(selected = trendDays == days, onClick = { trendDays = days; customStart = ""; customEnd = "" },
                             label = { Text("$days days") })
                     }
                 }
-                UsageTrendCard(daysList.takeLast(trendDays), selectedFilter)
+                TextButton(onClick = { showCustomRange = true }) { Text("Custom date range") }
+                val range = if (customStart.isNotEmpty()) daysList.filter { it.dateStr >= customStart && it.dateStr <= customEnd }
+                    else daysList.takeLast(trendDays)
+                UsageTrendCard(range, selectedFilter)
+                if (showCustomRange) {
+                    CustomUsageRangeDialog(daysList.firstOrNull()?.dateStr.orEmpty(), daysList.lastOrNull()?.dateStr.orEmpty(),
+                        customStart, customEnd, onDismiss = { showCustomRange = false },
+                        onApply = { start, end -> customStart = start; customEnd = end; showCustomRange = false })
+                }
             }
         }
 
@@ -1032,7 +1043,7 @@ private fun UsageTrendCard(days: List<DayHeatmapCell>, filter: UsageFilterType) 
     Card(shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Last ${days.size} days · " + filter.label, style = MaterialTheme.typography.titleSmall)
+            Text("${days.size} days · " + filter.label, style = MaterialTheme.typography.titleSmall)
             Text(NetworkUtils.formatBytes(total), style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold)
             Text("${values.count { it != null }} of ${days.size} days recorded", style = MaterialTheme.typography.labelSmall)
@@ -1054,11 +1065,30 @@ private fun UsageTrendCard(days: List<DayHeatmapCell>, filter: UsageFilterType) 
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(days.first().displayDate, style = MaterialTheme.typography.labelSmall)
-                    Text("Today", style = MaterialTheme.typography.labelSmall)
+                    Text(days.last().displayDate, style = MaterialTheme.typography.labelSmall)
                 }
                 Text("Muted marks indicate missing records.", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
+}
+
+@Composable
+private fun CustomUsageRangeDialog(min: String, max: String, currentStart: String, currentEnd: String,
+    onDismiss: () -> Unit, onApply: (String, String) -> Unit) {
+    var start by remember { mutableStateOf(currentStart.ifEmpty { min }) }
+    var end by remember { mutableStateOf(currentEnd.ifEmpty { max }) }
+    fun validDate(value: String) = try { java.time.LocalDate.parse(value).toString() == value } catch (_: Exception) { false }
+    val valid = validDate(start) && validDate(end) && start >= min && end <= max && start <= end
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Custom usage range") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Choose dates within $min to $max (YYYY-MM-DD).")
+                androidx.compose.material3.OutlinedTextField(value = start, onValueChange = { start = it }, label = { Text("Start date") }, singleLine = true)
+                androidx.compose.material3.OutlinedTextField(value = end, onValueChange = { end = it }, label = { Text("End date") }, singleLine = true)
+                if (!valid) Text("Enter a valid range within recorded history.", color = MaterialTheme.colorScheme.error)
+            }
+        }, confirmButton = { TextButton(enabled = valid, onClick = { onApply(start, end) }) { Text("Apply") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
