@@ -49,6 +49,17 @@
                 android:value="Displays continuous real-time download and upload speed in a persistent status bar notification." />
         </service>
 
+        <service
+            android:name=".service.MonitoringTileService"
+            android:exported="true"
+            android:label="NetPulse monitoring"
+            android:icon="@drawable/ic_launcher_foreground"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Home-screen widget: today's data usage -->
         <receiver
             android:name=".widget.UsageWidgetProvider"
