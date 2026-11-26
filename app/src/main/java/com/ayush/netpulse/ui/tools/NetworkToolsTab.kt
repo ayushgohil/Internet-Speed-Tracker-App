@@ -47,7 +47,7 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
     var progress by remember { mutableStateOf(0f) }
     var phase by remember { mutableStateOf("Ready") }
     var measured by remember { mutableStateOf(0.0) }
-    var budgetName by rememberSaveable { mutableStateOf(NetworkTests.Budget.LOW.name) }
+    var budgetName by rememberSaveable { mutableStateOf(NetworkTests.Budget.STANDARD.name) }
     val budget = NetworkTests.Budget.valueOf(budgetName)
     var downloadResult by remember { mutableStateOf<Double?>(null) }
     var uploadResult by remember { mutableStateOf<Double?>(null) }
@@ -262,6 +262,12 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
                 uploadResult = result.uploadMbps
                 transferred = result.bytes
                 progress = 1f
+                measured = result.uploadMbps
+                phase = "Finishing"
+                // Keep the final measured upload value visible while the needle settles.
+                // No traffic is generated during this presentation-only transition.
+                kotlinx.coroutines.delay(900)
+                checkNetwork()
                 phase = "Completed"
                 testHistory = SpeedTestHistory.add(context, SpeedTestHistory.Entry(System.currentTimeMillis(), result.downloadMbps, result.uploadMbps, network))
             }

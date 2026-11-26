@@ -20,9 +20,21 @@ class SpeedExperienceTest {
     }
 
     @Test fun budgetCapsAreExplicit() {
-        assertEquals(6, NetworkTests.Budget.LOW.maxMb)
-        assertEquals(52, NetworkTests.Budget.STANDARD.maxMb)
-        assertEquals(130, NetworkTests.Budget.EXTENDED.maxMb)
+        assertEquals(10, NetworkTests.Budget.LOW.maxMb)
+        assertEquals(200, NetworkTests.Budget.STANDARD.maxMb)
+        assertEquals(500, NetworkTests.Budget.EXTENDED.maxMb)
         assertTrue(NetworkTests.Budget.values().all { it.stageMillis > 0 && it.downloadBytes > 0 && it.uploadBytes > 0 })
+    }
+    @Test fun adaptiveRequestsRespectBounds() {
+        assertEquals(5_000_000, NetworkTests.requestBytes(false, 0.0, 8000))
+        assertEquals(25_000_000, NetworkTests.requestBytes(false, 1000.0, 8000))
+        assertEquals(4_000_000, NetworkTests.requestBytes(true, 1000.0, 8000))
+        assertTrue(NetworkTests.requestBytes(false, 50.0, 100) < NetworkTests.requestBytes(false, 50.0, 1000))
+    }
+
+    @Test fun progressTracksEitherTimeOrPayloadLimit() {
+        assertEquals(.5f, NetworkTests.stageProgress(10, 100, 4000, 8000), .001f)
+        assertEquals(1f, NetworkTests.stageProgress(100, 100, 1, 8000), 0f)
+        assertEquals(1f, NetworkTests.stageProgress(1, 100, 8000, 8000), 0f)
     }
 }
