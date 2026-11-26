@@ -46,7 +46,7 @@ internal object NetworkTests {
     }
 
     /** Bounded transfer test: at most 5 MB download and 1 MB upload payload. */
-    suspend fun speed(): Speed = withContext(Dispatchers.IO) {
+    suspend fun speed(onProgress: (String, Double, Float) -> Unit = { _, _, _ -> }): Speed = withContext(Dispatchers.IO) {
         fun connection(path: String) = (URL("https://$HOST$path").openConnection() as HttpsURLConnection).apply {
             connectTimeout = 5000
             readTimeout = 5000
@@ -57,6 +57,7 @@ internal object NetworkTests {
         val download = connection("/__down?bytes=$DOWNLOAD_BYTES")
         val buffer = ByteArray(16_384)
         var received = 0L
+        var lastProgress = 0L
         val start = SystemClock.elapsedRealtimeNanos()
         try {
             check(download.responseCode == 200) { "Download endpoint unavailable" }
@@ -67,6 +68,11 @@ internal object NetworkTests {
                     val count = input.read(buffer, 0, minOf(buffer.size.toLong(), DOWNLOAD_BYTES - received).toInt())
                     if (count < 0) break
                     received += count
+                    val tick = SystemClock.elapsedRealtime()
+                    if (tick - lastProgress >= 100 || received == DOWNLOAD_BYTES.toLong()) {
+                        lastProgress = tick
+                        onProgress("Download", received * 8000.0 / (SystemClock.elapsedRealtimeNanos() - start).coerceAtLeast(1), received.toFloat() / DOWNLOAD_BYTES)
+                    }
                 }
             }
             check(received == DOWNLOAD_BYTES.toLong()) { "Incomplete download" }
@@ -80,6 +86,7 @@ internal object NetworkTests {
             setRequestProperty("Content-Type", "application/octet-stream")
         }
         val uploadStart = SystemClock.elapsedRealtimeNanos()
+        lastProgress = 0L
         try {
             upload.outputStream.use { out ->
                 var remaining = UPLOAD_BYTES
@@ -88,6 +95,11 @@ internal object NetworkTests {
                     val count = minOf(remaining, buffer.size)
                     out.write(buffer, 0, count)
                     remaining -= count
+                    val tick = SystemClock.elapsedRealtime()
+                    if (tick - lastProgress >= 100 || remaining == 0) {
+                        lastProgress = tick
+                        onProgress("Upload", (UPLOAD_BYTES - remaining) * 8000.0 / (SystemClock.elapsedRealtimeNanos() - uploadStart).coerceAtLeast(1), (UPLOAD_BYTES - remaining).toFloat() / UPLOAD_BYTES)
+                    }
                 }
             }
             check(upload.responseCode in 200..299) { "Upload endpoint unavailable" }
