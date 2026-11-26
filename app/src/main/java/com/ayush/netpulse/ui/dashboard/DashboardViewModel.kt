@@ -45,7 +45,7 @@ class DashboardViewModel(
         // Observe network connection type
         viewModelScope.launch {
             repository.observeNetworkType().collect { netType ->
-                _uiState.update { it.copy(networkType = netType) }
+                _uiState.update { it.copy(networkType = netType, liveSpeedHistory = if (it.networkType != netType) emptyList() else it.liveSpeedHistory) }
                 // Notify smoother of network switch to prevent stale values across transports
                 val currentRaw = _uiState.value.liveSpeed
                 val smoothed = speedSmoother.smooth(currentRaw, netType)
@@ -85,7 +85,12 @@ class DashboardViewModel(
             SpeedTrackerService.liveSpeedState.collect { rawSpeed ->
                 val netType = _uiState.value.networkType
                 val smoothed = speedSmoother.smooth(rawSpeed, netType)
-                _uiState.update { it.copy(liveSpeed = smoothed) }
+                _uiState.update { state ->
+                    val history = (state.liveSpeedHistory + smoothed)
+                        .filter { it.timestamp >= smoothed.timestamp - 60_000L }
+                        .takeLast(120)
+                    state.copy(liveSpeed = smoothed, liveSpeedHistory = history)
+                }
                 preferencesManager.lastDisplayedSpeedTimestamp = System.currentTimeMillis()
             }
         }
@@ -286,7 +291,12 @@ class DashboardViewModel(
                 val rawSpeed = repository.sampleCurrentSpeed()
                 val netType = _uiState.value.networkType
                 val smoothed = speedSmoother.smooth(rawSpeed, netType)
-                _uiState.update { it.copy(liveSpeed = smoothed) }
+                _uiState.update { state ->
+                    val history = (state.liveSpeedHistory + smoothed)
+                        .filter { it.timestamp >= smoothed.timestamp - 60_000L }
+                        .takeLast(120)
+                    state.copy(liveSpeed = smoothed, liveSpeedHistory = history)
+                }
                 preferencesManager.lastSpeedSampleTimestamp = System.currentTimeMillis()
                 preferencesManager.lastDisplayedSpeedTimestamp = System.currentTimeMillis()
 
@@ -307,7 +317,7 @@ class DashboardViewModel(
         speedSmoother.reset()
         if (!SpeedTrackerService.isServiceRunningState.value && !preferencesManager.isBackgroundMonitoringEnabled) {
             repository.resetSpeedBaseline()
-            _uiState.update { it.copy(liveSpeed = LiveSpeed(0L, 0L)) }
+            _uiState.update { it.copy(liveSpeed = LiveSpeed(0L, 0L), liveSpeedHistory = emptyList()) }
         }
     }
 

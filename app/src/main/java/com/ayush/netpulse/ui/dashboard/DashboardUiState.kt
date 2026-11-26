@@ -15,6 +15,7 @@ data class DashboardUiState(
     val isBatteryOptimizationIgnored: Boolean = false,
     val networkType: NetworkType = NetworkType.DISCONNECTED,
     val liveSpeed: LiveSpeed = LiveSpeed(),
+    val liveSpeedHistory: List<LiveSpeed> = emptyList(),
     val dailyUsage: DataUsage = DataUsage(),
     val recentDailyRecords: List<DailyUsageEntity> = emptyList(),
     val recentRecords: List<SpeedRecordEntity> = emptyList(),

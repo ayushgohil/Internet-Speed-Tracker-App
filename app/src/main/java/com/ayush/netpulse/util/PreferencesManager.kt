@@ -23,6 +23,10 @@ class PreferencesManager(context: Context) {
         get() = prefs.getLong(KEY_LAST_RECONCILED_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_RECONCILED_TIMESTAMP, value).apply()
 
+    var lastFullReconciliationTimestamp: Long
+        get() = prefs.getLong("key_last_full_reconciliation_timestamp", 0L)
+        set(value) = prefs.edit().putLong("key_last_full_reconciliation_timestamp", value).apply()
+
     var lastReconciliationStatus: String?
         get() = prefs.getString(KEY_LAST_RECONCILIATION_STATUS, "Not yet executed")
         set(value) = prefs.edit().putString(KEY_LAST_RECONCILIATION_STATUS, value).apply()

@@ -24,7 +24,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -208,49 +209,11 @@ fun MainScreen(
                         )
                     )
 
-                    // Primary Tabs: Overview | Usage
-                    PrimaryTabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        containerColor = MaterialTheme.colorScheme.background,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        divider = {
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                thickness = 0.5.dp
-                            )
-                        }
-                    ) {
-                        screens.forEach { screen ->
-                            val selected = pagerState.currentPage == screen.ordinal
-                            Tab(
-                                selected = selected,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(screen.ordinal)
-                                    }
-                                },
-                                text = {
-                                    Text(
-                                        text = screen.title,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = screen.icon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                },
-                                selectedContentColor = MaterialTheme.colorScheme.primary,
-                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+
                 }
             },
             bottomBar = {
+                Column {
                 // Sticky Usage Summary: Pinned only on Usage screen
                 if (pagerState.currentPage == NavScreen.USAGE.ordinal && uiState.hasUsageAccessPermission) {
                     StickyUsageSummaryBar(
@@ -260,6 +223,22 @@ fun MainScreen(
                         daysCount = 90,
                         recordedDaysCount = usageSummary.third
                     )
+                }
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    screens.forEach { screen ->
+                        NavigationBarItem(
+                            selected = pagerState.currentPage == screen.ordinal,
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(screen.ordinal) } },
+                            icon = { Icon(screen.icon, contentDescription = null) },
+                            label = { Text(screen.title) }
+                        )
+                    }
+                    NavigationBarItem(selected = false, onClick = {
+                        openSettingsDirectlyToLogs = false
+                        isSettingsOpen = true
+                    }, icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        label = { Text("Settings") })
+                }
                 }
             }
         ) { innerPadding ->
