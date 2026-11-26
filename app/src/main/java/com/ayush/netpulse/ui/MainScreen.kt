@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -241,6 +242,10 @@ fun MainScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) { page ->
+                Box(Modifier.fillMaxSize().graphicsLayer {
+                    val distance = kotlin.math.abs((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).coerceIn(0f, 1f)
+                    alpha = 1f - distance * .12f
+                }) {
                 when (screens[page]) {
                     NavScreen.OVERVIEW -> {
                         DashboardTab(
@@ -286,6 +291,7 @@ fun MainScreen(
                             lazyListState = usageLazyListState
                         )
                     }
+                }
                 }
             }
         }
