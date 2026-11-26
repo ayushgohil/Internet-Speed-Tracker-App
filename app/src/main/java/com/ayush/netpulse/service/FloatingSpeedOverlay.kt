@@ -19,6 +19,8 @@ internal class FloatingSpeedOverlay(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private val prefs = context.getSharedPreferences("netpulse_overlay", Context.MODE_PRIVATE)
     private var view: TextView? = null
+    private var positionRevision = prefs.getInt("position_revision", 0)
+    private var styleKey = ""
     @Volatile private var closed = false
     private val density = context.resources.displayMetrics.density
 
@@ -30,8 +32,25 @@ internal class FloatingSpeedOverlay(private val context: Context) {
                 return@post
             }
             try {
+                val revision = prefs.getInt("position_revision", 0)
+                if (revision != positionRevision) {
+                    remove()
+                    positionRevision = revision
+                }
                 val label = view ?: create()
-                label.text = "↓ ${speed.formattedDownload}\n↑ ${speed.formattedUpload}"
+                val font = prefs.getInt("font_size", 12).coerceIn(10, 22)
+                val opacity = prefs.getInt("opacity", 90).coerceIn(35, 100)
+                val style = "$font:$opacity"
+                if (styleKey != style) {
+                    label.textSize = font.toFloat()
+                    label.background = GradientDrawable().apply {
+                        setColor(Color.argb(opacity * 255 / 100, 23, 33, 59))
+                        cornerRadius = 10 * density
+                    }
+                    styleKey = style
+                }
+                label.text = if (prefs.getBoolean("download_only", false)) "↓ ${speed.formattedDownload}"
+                    else "↓ ${speed.formattedDownload}\n↑ ${speed.formattedUpload}"
             } catch (_: RuntimeException) {
                 remove()
             }
@@ -92,6 +111,7 @@ internal class FloatingSpeedOverlay(private val context: Context) {
     private fun remove() {
         view?.let { try { manager.removeView(it) } catch (_: RuntimeException) { } }
         view = null
+        styleKey = ""
     }
 
     fun close() {
