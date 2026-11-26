@@ -325,6 +325,7 @@ class NetworkRepository(
             var wifiTx = 0L
             var mobileRx = 0L
             var mobileTx = 0L
+            var mobileQuerySucceeded = false
 
             try {
                 @Suppress("DEPRECATION")
@@ -350,6 +351,7 @@ class NetworkRepository(
                 )
                 mobileRx = mobileBucket.rxBytes
                 mobileTx = mobileBucket.txBytes
+                mobileQuerySucceeded = true
             } catch (e: Exception) {
                 Log.w("NetworkRepository", "Could not query Mobile data summary: ${e.message}")
             }
@@ -369,6 +371,7 @@ class NetworkRepository(
             preferencesManager.cachedTodayDate = NetworkUtils.formatDateString(now)
 
             // Monthly data limit: mobile usage since the billing cycle started, then alert if needed
+            if (mobileQuerySucceeded) com.ayush.netpulse.util.DataLimitNotifier.checkDaily(context, preferencesManager, todayUsage.totalMobileBytes, now)
             updateCycleUsageAndAlerts(now)
             com.ayush.netpulse.widget.UsageWidgetProvider.refresh(context)
 

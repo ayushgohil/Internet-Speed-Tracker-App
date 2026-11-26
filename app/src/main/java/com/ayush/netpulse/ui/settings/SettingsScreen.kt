@@ -85,6 +85,7 @@ fun SettingsScreen(
     onToggleSpeedInStatusBar: () -> Unit,
     onToggleShowOnLockScreen: () -> Unit,
     onSetDataLimitGb: (Double) -> Unit,
+    onSetDailyDataLimitGb: (Double) -> Unit = {},
     onSetDataLimitCycleDay: (Int) -> Unit,
     onSetSpeedUnit: (String) -> Unit,
     onSetNotificationStyle: (String) -> Unit = {},
@@ -116,6 +117,7 @@ fun SettingsScreen(
     var showUnitDialog by remember { mutableStateOf(false) }
     var showRetentionDialog by remember { mutableStateOf(false) }
     var showDataLimitDialog by remember { mutableStateOf(false) }
+    var showDailyLimitDialog by remember { mutableStateOf(false) }
     var showCycleDayDialog by remember { mutableStateOf(false) }
     var showNotificationStyleDialog by remember { mutableStateOf(false) }
     var showRefreshIntervalDialog by remember { mutableStateOf(false) }
@@ -253,6 +255,25 @@ fun SettingsScreen(
         item {
             SectionHeader(title = "Data limit")
             PreferenceGroup {
+                PreferenceClickableRow(
+                    title = "Daily mobile data limit",
+                    value = if (uiState.dailyDataLimitBytes > 0) "${DataLimit.formatGb(uiState.dailyDataLimitBytes)} GB" else "Off",
+                    onClick = { showDailyLimitDialog = true }
+                )
+                if (uiState.dailyDataLimitBytes > 0 && uiState.hasUsageAccessPermission) {
+                    val used = uiState.dailyUsage.totalMobileBytes
+                    val percent = DataLimit.percentUsed(used, uiState.dailyDataLimitBytes)
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text("Today: ${NetworkUtils.formatBytes(used)} used ($percent%)",
+                            style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(progress = { (percent / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth())
+                        Text("Resets at local midnight. Alerts at 80% and 100%.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 PreferenceClickableRow(
                     title = "Monthly mobile data limit",
                     value = if (uiState.dataLimitBytes > 0L) "${DataLimit.formatGb(uiState.dataLimitBytes)} GB" else "Off",
@@ -836,6 +857,28 @@ fun SettingsScreen(
     }
 
     // Data limit dialog (GB, decimals allowed; empty or 0 turns it off)
+    if (showDailyLimitDialog) {
+        var input by remember { mutableStateOf(if (uiState.dailyDataLimitBytes > 0)
+            (uiState.dailyDataLimitBytes.toDouble() / DataLimit.BYTES_PER_GB).toString() else "") }
+        val parsed = input.trim().toDoubleOrNull()
+        val valid = input.isBlank() || (parsed != null && parsed.isFinite() && parsed in 0.0..1000.0)
+        AlertDialog(onDismissRequest = { showDailyLimitDialog = false },
+            title = { Text("Daily data limit") },
+            text = {
+                Column {
+                    Text("Enter your daily mobile allowance in GB. Leave blank to disable.")
+                    OutlinedTextField(value = input, onValueChange = { input = it },
+                        label = { Text("Limit (GB)") }, singleLine = true, isError = !valid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                }
+            },
+            confirmButton = { TextButton(enabled = valid, onClick = {
+                onSetDailyDataLimitGb(parsed ?: 0.0)
+                showDailyLimitDialog = false
+            }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { showDailyLimitDialog = false }) { Text("Cancel") } })
+    }
+
     if (showDataLimitDialog) {
         var input by remember {
             mutableStateOf(if (uiState.dataLimitBytes > 0L) DataLimit.formatGb(uiState.dataLimitBytes) else "")

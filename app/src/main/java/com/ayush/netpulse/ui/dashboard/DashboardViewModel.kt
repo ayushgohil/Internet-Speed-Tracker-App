@@ -104,6 +104,7 @@ class DashboardViewModel(
                 showSpeedInStatusBar = preferencesManager.showSpeedInStatusBar,
                 showOnLockScreen = preferencesManager.showOnLockScreen,
                 dataLimitBytes = preferencesManager.dataLimitBytes,
+                dailyDataLimitBytes = preferencesManager.dailyDataLimitBytes,
                 dataLimitCycleDay = preferencesManager.dataLimitCycleDay,
                 cycleMobileBytes = preferencesManager.cachedCycleMobileBytes,
                 speedUnitPreference = preferencesManager.speedUnitPreference,
@@ -344,6 +345,14 @@ class DashboardViewModel(
     }
 
     /** Sets the monthly mobile data limit in GB; 0 or less turns the limit and its alerts off. */
+    fun setDailyDataLimitGb(gb: Double) {
+        val bytes = if (gb.isFinite() && gb > 0.0) DataLimit.gbToBytes(gb.coerceAtMost(1000.0)) else 0L
+        preferencesManager.dailyDataLimitBytes = bytes
+        preferencesManager.dailyDataLimitAlertState = ""
+        _uiState.update { it.copy(dailyDataLimitBytes = bytes) }
+        if (bytes > 0 && _uiState.value.hasUsageAccessPermission) loadDailyDataUsage(isSilent = true)
+    }
+
     fun setDataLimitGb(gb: Double) {
         val bytes = if (gb > 0.0) DataLimit.gbToBytes(gb) else 0L
         preferencesManager.dataLimitBytes = bytes
