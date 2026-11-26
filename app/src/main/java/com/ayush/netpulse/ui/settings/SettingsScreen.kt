@@ -299,14 +299,14 @@ fun SettingsScreen(
             PreferenceGroup {
                 PreferenceClickableRow(
                     title = "Daily mobile data limit",
-                    value = if (uiState.dailyDataLimitBytes > 0) "${DataLimit.formatGb(uiState.dailyDataLimitBytes)} GB" else "Off",
+                    value = DataLimit.label(uiState.dailyDataLimitBytes),
                     onClick = { showDailyLimitDialog = true }
                 )
                 if (uiState.dailyDataLimitBytes > 0 && uiState.hasUsageAccessPermission) {
                     val used = uiState.dailyUsage.totalMobileBytes
                     val percent = DataLimit.percentUsed(used, uiState.dailyDataLimitBytes)
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("Today: ${NetworkUtils.formatBytes(used)} used ($percent%)",
+                        Text("Today: ${NetworkUtils.formatBytes(used)} used ($percent%) · " + if (used > uiState.dailyDataLimitBytes) NetworkUtils.formatBytes(used - uiState.dailyDataLimitBytes) + " over" else NetworkUtils.formatBytes(uiState.dailyDataLimitBytes - used) + " remaining",
                             style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(8.dp))
                         LinearProgressIndicator(progress = { (percent / 100f).coerceIn(0f, 1f) },
@@ -315,14 +315,15 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall)
                     }
                 }
+                if (uiState.dailyDataLimitBytes == DataLimit.UNLIMITED && uiState.hasUsageAccessPermission) Text("Today: " + NetworkUtils.formatBytes(uiState.dailyUsage.totalMobileBytes) + " used · No limit", modifier = Modifier.padding(16.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 PreferenceClickableRow(
                     title = "Monthly mobile data limit",
-                    value = if (uiState.dataLimitBytes > 0L) "${DataLimit.formatGb(uiState.dataLimitBytes)} GB" else "Off",
+                    value = DataLimit.label(uiState.dataLimitBytes),
                     onClick = { showDataLimitDialog = true }
                 )
 
-                if (uiState.dataLimitBytes > 0L) {
+                if (uiState.dataLimitBytes != 0L) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), thickness = 0.5.dp)
                     PreferenceClickableRow(
                         title = "Plan renews on day",
@@ -335,6 +336,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
                         Text(
                             text = if (uiState.hasUsageAccessPermission) {
+                                if (uiState.dataLimitBytes == DataLimit.UNLIMITED) "Used this cycle: ${NetworkUtils.formatBytes(uiState.cycleMobileBytes)} · Unlimited" else
                                 "Used this cycle: ${NetworkUtils.formatBytes(uiState.cycleMobileBytes)} of " +
                                     "${DataLimit.formatGb(uiState.dataLimitBytes)} GB ($percent%)"
                             } else "Allow Usage Access to track the limit",
@@ -342,14 +344,15 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(
+                        if (uiState.dataLimitBytes > 0 && uiState.hasUsageAccessPermission) LinearProgressIndicator(
                             progress = { (percent / 100f).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth(),
                             color = if (percent >= DataLimit.WARN_PERCENT) netPulseColors.warning else MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.height(6.dp))
+                        Text("Next renewal: " + java.text.DateFormat.getDateInstance().format(java.util.Date(DataLimit.nextCycleMillis(System.currentTimeMillis(), uiState.dataLimitCycleDay))), style = MaterialTheme.typography.bodySmall)
                         Text(
-                            text = "You get an alert at ${DataLimit.WARN_PERCENT}% and when the limit is reached. " +
+                            text = (if (uiState.dataLimitBytes == DataLimit.UNLIMITED) "No limit alerts. " else "You get an alert at ${DataLimit.WARN_PERCENT}% and when the limit is reached. ") +
                                 "Counts mobile data only.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -898,75 +901,10 @@ fun SettingsScreen(
         )
     }
 
-    // Data limit dialog (GB, decimals allowed; empty or 0 turns it off)
-    if (showDailyLimitDialog) {
-        var input by remember { mutableStateOf(if (uiState.dailyDataLimitBytes > 0)
-            (uiState.dailyDataLimitBytes.toDouble() / DataLimit.BYTES_PER_GB).toString() else "") }
-        val parsed = input.trim().toDoubleOrNull()
-        val valid = input.isBlank() || (parsed != null && parsed.isFinite() && parsed in 0.0..1000.0)
-        AlertDialog(onDismissRequest = { showDailyLimitDialog = false },
-            title = { Text("Daily data limit") },
-            text = {
-                Column {
-                    Text("Enter your daily mobile allowance in GB. Leave blank to disable.")
-                    OutlinedTextField(value = input, onValueChange = { input = it },
-                        label = { Text("Limit (GB)") }, singleLine = true, isError = !valid,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                }
-            },
-            confirmButton = { TextButton(enabled = valid, onClick = {
-                onSetDailyDataLimitGb(parsed ?: 0.0)
-                showDailyLimitDialog = false
-            }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { showDailyLimitDialog = false }) { Text("Cancel") } })
-    }
-
-    if (showDataLimitDialog) {
-        var input by remember {
-            mutableStateOf(if (uiState.dataLimitBytes > 0L) DataLimit.formatGb(uiState.dataLimitBytes) else "")
-        }
-        val parsed = input.trim().toDoubleOrNull()
-        val valid = input.isBlank() || (parsed != null && parsed >= 0.0 && parsed <= 10000.0)
-        AlertDialog(
-            onDismissRequest = { showDataLimitDialog = false },
-            title = {
-                Text("Monthly data limit", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "Enter your mobile data plan in GB. Leave empty to turn the limit off.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = input,
-                        onValueChange = { input = it },
-                        label = { Text("Limit (GB)") },
-                        singleLine = true,
-                        isError = !valid,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = valid,
-                    onClick = {
-                        onSetDataLimitGb(parsed ?: 0.0)
-                        showDataLimitDialog = false
-                    }
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDataLimitDialog = false }) {
-                    Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    }
+    if (showDailyLimitDialog) PlanAllowanceDialog("Daily mobile plan", uiState.dailyDataLimitBytes, true,
+        { showDailyLimitDialog = false }, { onSetDailyDataLimitGb(it); showDailyLimitDialog = false })
+    if (showDataLimitDialog) PlanAllowanceDialog("Monthly mobile plan", uiState.dataLimitBytes, false,
+        { showDataLimitDialog = false }, { onSetDataLimitGb(it); showDataLimitDialog = false })
 
     // Billing cycle day dialog
     if (showCycleDayDialog) {
@@ -981,7 +919,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "Day of the month your data plan resets (1 to ${DataLimit.MAX_CYCLE_DAY}).",
+                        text = "Day of the month your plan resets (1 to 31). Short months use their last day.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1539,4 +1477,49 @@ private fun SettingsCategoryRow(title: String, subtitle: String, icon: ImageVect
         Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
+}
+
+@Composable
+private fun PlanAllowanceDialog(title: String, bytes: Long, daily: Boolean, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+    var mode by remember { mutableStateOf(if (bytes == DataLimit.UNLIMITED) "Unlimited" else if (bytes > 0) "Limited" else "Off") }
+    var unit by remember { mutableStateOf("GB") }
+    var input by remember { mutableStateOf(if (bytes > 0) DataLimit.formatGb(bytes) else "") }
+    val parsed = DataLimit.parseAllowance(input, unit)
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Text("Track mobile usage independently of your carrier. Unlimited disables threshold alerts, not usage tracking.")
+            listOf("Limited", "Unlimited", "Off").forEach { option ->
+                Row(Modifier.fillMaxWidth().clickable { mode = option }, verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.RadioButton(selected = mode == option, onClick = { mode = option })
+                    Text(option)
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(mode == "Limited") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row {
+                        listOf("GB", "MB").forEach { choice ->
+                            androidx.compose.material3.FilterChip(selected = unit == choice, onClick = {
+                                if (unit != choice) {
+                                    input = parsed?.let { if (choice == "GB") DataLimit.formatGb(it) else (it.toDouble() / (1024 * 1024)).toString() } ?: input
+                                    unit = choice
+                                }
+                            }, label = { Text(choice) })
+                            Spacer(Modifier.width(8.dp))
+                        }
+                    }
+                    OutlinedTextField(value = input, onValueChange = { input = it }, label = { Text("Allowance ($unit)") },
+                        singleLine = true, isError = input.isNotBlank() && parsed == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        (if (daily) listOf("1", "1.5", "2", "3") else listOf("10", "30", "50", "100")).forEach { preset ->
+                            TextButton(onClick = { unit = "GB"; input = preset }) { Text(preset) }
+                        }
+                    }
+                    Text("Presets in GB · 1 GB = 1024 MB. Resets " + if (daily) "at local midnight." else "on your billing day.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }, confirmButton = { TextButton(enabled = mode != "Limited" || parsed != null, onClick = {
+        onSave(when (mode) { "Unlimited" -> -1.0; "Off" -> 0.0; else -> (parsed ?: 0L).toDouble() / DataLimit.BYTES_PER_GB })
+    }) { Text("Save") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }

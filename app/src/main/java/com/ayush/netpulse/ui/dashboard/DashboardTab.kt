@@ -89,11 +89,12 @@ fun DashboardTab(
     val npColors = LocalNetPulseColors.current
     val pullRefreshState = rememberPullToRefreshState()
 
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            onRefresh()
-            pullRefreshState.endRefresh()
-        }
+    LaunchedEffect(pullRefreshState.isRefreshing) {
+        if (pullRefreshState.isRefreshing && !uiState.isLoadingUsage && isVisible && uiState.hasUsageAccessPermission) onRefresh()
+    }
+    LaunchedEffect(uiState.isLoadingUsage, isVisible) {
+        if (isVisible && uiState.isLoadingUsage) pullRefreshState.startRefresh()
+        else pullRefreshState.endRefresh()
     }
 
     Box(
@@ -145,8 +146,8 @@ fun DashboardTab(
                     SummaryTile("Mobile plan",
                         if (uiState.dataLimitBytes > 0) NetworkUtils.formatBytes(
                             (uiState.dataLimitBytes - uiState.cycleMobileBytes).coerceAtLeast(0L))
-                        else "Not set",
-                        if (uiState.dataLimitBytes > 0) "Remaining this cycle" else "Set a data limit",
+                        else if (uiState.dataLimitBytes == com.ayush.netpulse.util.DataLimit.UNLIMITED) "Unlimited" else "Not set",
+                        if (uiState.dataLimitBytes > 0) "Remaining this cycle" else if (uiState.dataLimitBytes < 0) NetworkUtils.formatBytes(uiState.cycleMobileBytes) + " used" else "Set a data limit",
                         onOpenSettings, Modifier.weight(1f))
                 }
             }
@@ -156,8 +157,8 @@ fun DashboardTab(
                 val limit = uiState.dailyDataLimitBytes
                 val remaining = (limit - uiState.dailyUsage.totalMobileBytes).coerceAtLeast(0L)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryTile("Daily allowance", if (limit > 0) NetworkUtils.formatBytes(remaining) else "Not set",
-                        if (limit > 0) "Remaining today" else "Configure in settings", onOpenSettings, Modifier.weight(1f))
+                    SummaryTile("Daily allowance", if (limit > 0) NetworkUtils.formatBytes(remaining) else if (limit < 0) "Unlimited" else "Not set",
+                        if (limit > 0) "Remaining today" else if (limit < 0) NetworkUtils.formatBytes(uiState.dailyUsage.totalMobileBytes) + " used" else "Configure in settings", onOpenSettings, Modifier.weight(1f))
                     SummaryTile("App usage", "By app", "See top consumers", onNavigateToApps, Modifier.weight(1f))
                 }
             }
@@ -172,7 +173,7 @@ fun DashboardTab(
                         Text("Daily mobile plan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(NetworkUtils.formatBytes(used) + " of " + NetworkUtils.formatBytes(limit), style = MaterialTheme.typography.bodyMedium)
                         LinearProgressIndicator(progress = { (used.toDouble() / limit).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape))
-                        Text(if (used >= limit) "Daily allowance reached" else NetworkUtils.formatBytes(limit - used) + " remaining", style = MaterialTheme.typography.labelSmall)
+                        Text(if (used > limit) NetworkUtils.formatBytes(used - limit) + " over allowance" else if (used == limit) "Daily allowance reached" else NetworkUtils.formatBytes(limit - used) + " remaining", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -693,8 +694,9 @@ private fun SummaryTile(title: String, value: String, detail: String, onClick: (
                 else -> Icons.Default.DataUsage
             }, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary)
+            androidx.compose.animation.Crossfade(targetState = value, label = "summaryValue") { current ->
+                Text(current, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -715,7 +717,7 @@ private fun animatedSpeedLabel(bytes: Long, animate: Boolean): String {
     val target = bytes.coerceAtLeast(0).toFloat()
     val value = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(target) }
     androidx.compose.runtime.LaunchedEffect(target, enabled) {
-        if (enabled) value.animateTo(target, androidx.compose.animation.core.tween(300))
+        if (enabled) value.animateTo(target, androidx.compose.animation.core.tween(750, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
         else value.snapTo(target)
     }
     return NetworkUtils.formatSpeed(if (enabled) value.value.toLong() else bytes.coerceAtLeast(0))

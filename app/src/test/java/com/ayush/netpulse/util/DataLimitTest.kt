@@ -38,9 +38,12 @@ class DataLimitTest {
     }
 
     @Test
-    fun cycleDayIsClampedTo28() {
+    fun cycleDay31UsesLastDayOfShortMonth() {
         val start = DataLimit.cycleStartMillis(millis(2026, 3, 31), 31, utc)
-        assertEquals(millis(2026, 3, 28, 0), start)
+        assertEquals(millis(2026, 3, 31, 0), start)
+        assertEquals(millis(2026, 2, 28, 0), DataLimit.cycleStartMillis(millis(2026, 3, 1), 31, utc))
+        assertEquals(millis(2028, 2, 29, 0), DataLimit.cycleStartMillis(millis(2028, 2, 29), 31, utc))
+        assertEquals(millis(2028, 3, 31, 0), DataLimit.nextCycleMillis(millis(2028, 2, 29), 31, utc))
     }
 
     @Test
@@ -72,5 +75,19 @@ class DataLimitTest {
     fun formatGb() {
         assertEquals("5", DataLimit.formatGb(DataLimit.gbToBytes(5.0)))
         assertEquals("2.5", DataLimit.formatGb(DataLimit.gbToBytes(2.5)))
+    }
+    @Test fun allowanceModesAndUnits() {
+        assertEquals(-1L, DataLimit.gbToBytes(-1.0))
+        assertEquals(0L, DataLimit.gbToBytes(Double.NaN))
+        assertEquals(0, DataLimit.percentUsed(Long.MAX_VALUE, DataLimit.UNLIMITED))
+        assertEquals(2L * DataLimit.BYTES_PER_GB, DataLimit.parseAllowance("2", "GB")!!)
+        assertEquals(512L * 1024 * 1024, DataLimit.parseAllowance("512", "MB")!!)
+        assertEquals(DataLimit.gbToBytes(1.5), DataLimit.parseAllowance("1,5", "GB")!!)
+        assertNull(DataLimit.parseAllowance("Infinity", "GB"))
+        assertNull(DataLimit.parseAllowance("-2", "GB"))
+        assertNull(DataLimit.parseAllowance("0", "GB"))
+        assertNull(DataLimit.parseAllowance("10001", "GB"))
+        assertEquals(0L, DataLimit.remaining(120, 100))
+        assertEquals(20L, DataLimit.overage(120, 100))
     }
 }

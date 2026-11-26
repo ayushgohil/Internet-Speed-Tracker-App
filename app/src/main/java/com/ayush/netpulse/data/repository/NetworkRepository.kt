@@ -407,7 +407,7 @@ class NetworkRepository(
     }
 
     private fun updateCycleUsageAndAlerts(now: Long) {
-        if (preferencesManager.dataLimitBytes <= 0L) return
+        if (preferencesManager.dataLimitBytes == 0L) return
         try {
             val cycleStart = com.ayush.netpulse.util.DataLimit.cycleStartMillis(now, preferencesManager.dataLimitCycleDay)
             @Suppress("DEPRECATION")
@@ -417,7 +417,7 @@ class NetworkRepository(
                 cycleStart,
                 now
             ) ?: return
-            preferencesManager.cachedCycleMobileBytes = bucket.rxBytes + bucket.txBytes
+            preferencesManager.cachedCycleMobileBytes = bucket.rxBytes.coerceAtLeast(0) + bucket.txBytes.coerceAtLeast(0)
             com.ayush.netpulse.util.DataLimitNotifier.check(context, preferencesManager)
         } catch (e: Exception) {
             Log.w("NetworkRepository", "Could not query data-limit cycle usage: ${e.message}")

@@ -218,11 +218,11 @@ fun UsageTab(
     }
 
     val pullRefreshState = rememberPullToRefreshState()
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            onRefreshUsage()
-            pullRefreshState.endRefresh()
-        }
+    LaunchedEffect(pullRefreshState.isRefreshing) {
+        if (pullRefreshState.isRefreshing && !isLoadingUsage) onRefreshUsage()
+    }
+    LaunchedEffect(isLoadingUsage) {
+        if (isLoadingUsage) pullRefreshState.startRefresh() else pullRefreshState.endRefresh()
     }
 
     Box(
