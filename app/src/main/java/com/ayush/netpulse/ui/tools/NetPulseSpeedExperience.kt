@@ -42,7 +42,7 @@ internal fun NetPulseSpeedExperience(
     onBudget: (NetworkTests.Budget) -> Unit, onStart: () -> Unit, onCancel: () -> Unit, onHistory: () -> Unit
 ) {
     val colors = LocalNetPulseColors.current
-    val accent by animateColorAsStateCompat(if (phase == "Upload") colors.upload else colors.download)
+    val accent by animateColorAsStateCompat(if (phase == "Upload" || phase == "Finishing") colors.upload else colors.download)
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -79,7 +79,7 @@ internal fun NetPulseSpeedExperience(
                             CircularProgressIndicator(Modifier.size(112.dp), strokeWidth = 6.dp)
                             Text("Finding connection latency…", style = MaterialTheme.typography.titleMedium)
                         }
-                        "gauge" -> PulseGauge(measured, accent, phase)
+                        "gauge" -> PulseGauge(measured, accent, if (phase == "Finishing") "Upload" else phase)
                         "complete" -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Surface(shape = CircleShape, color = colors.download.copy(alpha = .12f)) {
                                 Box(Modifier.size(92.dp), contentAlignment = Alignment.Center) {
@@ -108,10 +108,10 @@ internal fun NetPulseSpeedExperience(
                 }
             }
             if (running) {
-                val overall = when (phase) { "Upload" -> .5f + progress * .5f; "Download" -> progress * .5f; else -> 0f }
+                val overall = when (phase) { "Finishing" -> 1f; "Upload" -> .5f + progress * .5f; "Download" -> progress * .5f; else -> 0f }
                 val animatedProgress by animateFloatAsState(overall.coerceIn(0f, 1f), tween(240), label = "testProgress")
                 LinearProgressIndicator(progress = { animatedProgress }, modifier = Modifier.fillMaxWidth(), color = accent)
-                Text(phase + " · " + String.format(Locale.US, "%.2f MB transferred in stage", bytes / 1_000_000.0), style = MaterialTheme.typography.labelMedium)
+                Text(if (phase == "Finishing") "Preparing measured results…" else phase + " · " + String.format(Locale.US, "%.2f MB transferred in stage", bytes / 1_000_000.0), style = MaterialTheme.typography.labelMedium)
                 OutlinedButton(onClick = onCancel) { Text("Cancel test") }
             }
             HorizontalDivider()
@@ -127,11 +127,12 @@ internal fun NetPulseSpeedExperience(
                             Column {
                                 Text(option.label, style = MaterialTheme.typography.labelSmall)
                                 Text("≤ ${option.maxMb} MB", style = MaterialTheme.typography.labelSmall)
+                                Text("~${option.stageMillis * 2 / 1000}s", style = MaterialTheme.typography.labelSmall)
                             }
                         })
                 }
             }
-            Text("Payload caps exclude protocol overhead. Tests stop at the selected budget or duration target; fast connections may finish early. TCP latency is not ICMP ping.",
+            Text("Standard is recommended for a sustained test. Transfer time targets exclude latency and connection setup. Fast connections can reach the payload cap early. Protocol overhead is extra. TCP latency is not ICMP ping.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -156,8 +157,8 @@ private fun ResultTile(label: String, result: Double?, color: Color, modifier: M
 @Composable
 private fun PulseGauge(measured: Double, accent: Color, phase: String) {
     val target = if (measured.isFinite()) measured.coerceAtLeast(0.0).toFloat() else 0f
-    val value by animateFloatAsState(target, spring(dampingRatio = 1f, stiffness = 75f), label = "liveSpeed")
-    val fraction by animateFloatAsState(gaugeFraction(measured), spring(dampingRatio = 1f, stiffness = 75f), label = "needle")
+    val value by animateFloatAsState(target, spring(dampingRatio = 1f, stiffness = 105f), label = "liveSpeed")
+    val fraction = gaugeFraction(value.toDouble())
     val ink = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val track = MaterialTheme.colorScheme.outline.copy(alpha = .25f)
