@@ -6,6 +6,14 @@ import android.content.Context
 import android.net.ConnectivityManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
@@ -94,6 +102,8 @@ fun AppUsageTab(hasPermission: Boolean, onRequestUsageAccess: () -> Unit, isVisi
     val colors = LocalNetPulseColors.current
     var days by rememberSaveable { mutableStateOf(1) }
     var filter by rememberSaveable { mutableStateOf("All") }
+    var sort by rememberSaveable { mutableStateOf("Total") }
+    var showSort by remember { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
     var refresh by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
@@ -133,29 +143,47 @@ fun AppUsageTab(hasPermission: Boolean, onRequestUsageAccess: () -> Unit, isVisi
         }
         return
     }
-    fun amount(app: AppUsage) = when (filter) { "Mobile" -> app.mobile; "Wi-Fi" -> app.wifi; else -> app.total }
-    val total = records.sumOf { amount(it) }
-    val visible = (if (loadedDays == days) records else emptyList()).filter { amount(it) > 0 && it.name.contains(search, ignoreCase = true) }.sortedByDescending { amount(it) }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = NetPulseDimensions.screenPadding), verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(vertical = 12.dp)) {
+    fun amount(app: AppUsage): Long = when (filter) {
+        "Mobile" -> when (sort) { "Download" -> app.mobileRx; "Upload" -> app.mobileTx; else -> app.mobile }
+        "Wi-Fi" -> when (sort) { "Download" -> app.wifiRx; "Upload" -> app.wifiTx; else -> app.wifi }
+        else -> when (sort) { "Download" -> app.mobileRx + app.wifiRx; "Upload" -> app.mobileTx + app.wifiTx; else -> app.total }
+    }
+    val current = if (loadedDays == days) records else emptyList()
+    val total = current.sumOf { when (filter) { "Mobile" -> it.mobile; "Wi-Fi" -> it.wifi; else -> it.total } }
+    val rankingTotal = current.sumOf { amount(it) }
+    val visible = current.filter { amount(it) > 0 && it.name.contains(search, ignoreCase = true) }.sortedByDescending { amount(it) }
+    if (selected != null && isVisible) {
+        BackHandler { selected = null }
+        AppDetailsPage(selected!!, days) { selected = null }
+        return
+    }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = NetPulseDimensions.screenPadding),
+        verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("App usage", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                TextButton(onClick = { refresh++ }, enabled = !loading) { Text("Refresh") }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("App usage", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { refresh++ }, enabled = !loading) { Icon(Icons.Default.Refresh, "Refresh usage") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1 to "Today", 7 to "7 days", 30 to "30 days").forEach { (value, label) ->
-                    FilterChip(selected = days == value, onClick = { days = value }, label = { Text(label) })
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Reported usage · $filter", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium)
+                    Text(if (loadedDays != days) "—" else NetworkUtils.formatBytes(total), color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    val wifi = current.sumOf { it.wifi }
+                    val mobile = current.sumOf { it.mobile }
+                    if (filter == "All") {
+                        UsageSplitBar(wifi, mobile)
+                        Text("Wi-Fi ${NetworkUtils.formatBytes(wifi)} · Mobile ${NetworkUtils.formatBytes(mobile)}",
+                            color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium)
+                    }
+                    Text("${current.size} UID records" + if (lastUpdated > 0) " · Updated " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(lastUpdated)) else "",
+                        color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelSmall)
                 }
             }
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Reported usage · $filter", style = MaterialTheme.typography.labelMedium)
-                    Text(if (loadedDays != days) "—" else NetworkUtils.formatBytes(total),
-                        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    if (lastUpdated > 0) Text("Updated " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(lastUpdated)), style = MaterialTheme.typography.labelSmall)
-                    Text("UID totals can differ from device totals due to attribution, VPN, tethering and query timing. Hidden apps may be grouped.",
-                        style = MaterialTheme.typography.bodySmall)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1 to "Today", 7 to "7 days", 30 to "30 days").forEach { (value, label) ->
+                    FilterChip(selected = days == value, onClick = { days = value }, label = { Text(label) })
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -164,40 +192,129 @@ fun AppUsageTab(hasPermission: Boolean, onRequestUsageAccess: () -> Unit, isVisi
                 }
             }
             OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
-                singleLine = true, label = { Text("Search apps") })
+                singleLine = true, shape = RoundedCornerShape(16.dp), placeholder = { Text("Search applications") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = { if (search.isNotEmpty()) IconButton(onClick = { search = "" }) { Icon(Icons.Default.Close, "Clear search") } })
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Top consumers", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                Box {
+                    TextButton(onClick = { showSort = true }) { Text("$sort ↓") }
+                    DropdownMenu(expanded = showSort, onDismissRequest = { showSort = false }) {
+                        listOf("Total", "Download", "Upload").forEach { value ->
+                            DropdownMenuItem(text = { Text(value) }, onClick = { sort = value; showSort = false })
+                        }
+                    }
+                }
+            }
         }
         if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
         if (!loading && error == null && visible.isEmpty()) item { Text("No matching usage records.") }
         items(visible, key = { it.uid }) { app ->
-            Card(onClick = { selected = app }, shape = RoundedCornerShape(NetPulseDimensions.cardRadius), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(NetPulseDimensions.cardPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (app.icon != null) Image(app.icon, contentDescription = null, modifier = Modifier.size(NetPulseDimensions.iconSize).clip(RoundedCornerShape(10.dp)))
-                            else Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(Icons.Default.Apps, contentDescription = null) }
-                            Text(app.name, fontWeight = FontWeight.SemiBold)
+            Surface(onClick = { selected = app }, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(app, 44)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(app.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, maxLines = 2)
+                            Text(NetworkUtils.formatBytes(amount(app)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         }
-                        Text(NetworkUtils.formatBytes(amount(app)))
+                        Text("Mobile ${NetworkUtils.formatBytes(app.mobile)} · Wi-Fi ${NetworkUtils.formatBytes(app.wifi)}", style = MaterialTheme.typography.labelSmall)
+                        LinearProgressIndicator(progress = { if (rankingTotal > 0) (amount(app).toDouble() / rankingTotal).toFloat().coerceIn(0f, 1f) else 0f }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape))
                     }
-                    Text("Mobile ${NetworkUtils.formatBytes(app.mobile)}", color = colors.upload,
-                        style = MaterialTheme.typography.labelSmall)
-                    Text("Wi-Fi ${NetworkUtils.formatBytes(app.wifi)}", color = colors.download,
-                        style = MaterialTheme.typography.labelSmall)
-                    LinearProgressIndicator(progress = { if (total > 0) (amount(app).toDouble() / total).toFloat().coerceIn(0f, 1f) else 0f },
-                        modifier = Modifier.fillMaxWidth())
+                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+        item { Text("UID totals can differ from device totals due to attribution, VPN, tethering and query timing. Some identities are restricted by Android.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
-    selected?.let { app ->
-        AlertDialog(onDismissRequest = { selected = null }, title = { Text(app.name) },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Mobile download: ${NetworkUtils.formatBytes(app.mobileRx)}")
-                Text("Mobile upload: ${NetworkUtils.formatBytes(app.mobileTx)}")
-                Text("Wi-Fi download: ${NetworkUtils.formatBytes(app.wifiRx)}")
-                Text("Wi-Fi upload: ${NetworkUtils.formatBytes(app.wifiTx)}")
-                Text("Total: ${NetworkUtils.formatBytes(app.total)}")
-            } }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } })
+}
+
+@Composable
+private fun AppIcon(app: AppUsage, size: Int) {
+    if (app.icon != null) Image(app.icon, contentDescription = null, modifier = Modifier.size(size.dp).clip(RoundedCornerShape(12.dp)))
+    else Box(Modifier.size(size.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(Icons.Default.Apps, null) }
+}
+
+@Composable
+internal fun UsageSplitBar(wifi: Long, mobile: Long) {
+    val colors = LocalNetPulseColors.current
+    val total = wifi.toDouble() + mobile.toDouble()
+    Row(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+        if (total > 0) {
+            if (wifi > 0) Box(Modifier.weight((wifi / total).toFloat()).fillMaxHeight().background(colors.download))
+            if (mobile > 0) Box(Modifier.weight((mobile / total).toFloat()).fillMaxHeight().background(colors.upload))
+        }
+    }
+}
+
+@Composable
+private fun AppDetailsPage(app: AppUsage, days: Int, onBack: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back to apps") }
+                Text("Application details", style = MaterialTheme.typography.titleLarge)
+            }
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AppIcon(app, 64)
+                    Text(app.name, style = MaterialTheme.typography.headlineSmall)
+                    Text(if (days == 1) "Today" else "Last $days days", style = MaterialTheme.typography.labelMedium)
+                    Text(NetworkUtils.formatBytes(app.total), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    UsageSplitBar(app.wifi, app.mobile)
+                }
+            }
+        }
+        items(listOf(Triple("Wi-Fi", app.wifiRx, app.wifiTx), Triple("Mobile", app.mobileRx, app.mobileTx))) { (label, rx, tx) ->
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(label, style = MaterialTheme.typography.titleMedium)
+                    Text(NetworkUtils.formatBytes(rx + tx), style = MaterialTheme.typography.headlineSmall)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column { Text("Download"); Text(NetworkUtils.formatBytes(rx), fontWeight = FontWeight.Bold) }
+                        Column(horizontalAlignment = Alignment.End) { Text("Upload"); Text(NetworkUtils.formatBytes(tx), fontWeight = FontWeight.Bold) }
+                    }
+                    LinearProgressIndicator(progress = { if (rx + tx > 0) (rx.toDouble() / (rx + tx)).toFloat() else 0f }, modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+        item { Text("Reported Android UID ${app.uid}. Shared or unidentified traffic cannot always be attributed to a single package.", style = MaterialTheme.typography.bodySmall) }
+    }
+}
+
+@Composable
+internal fun TopAppsTodayCard(isVisible: Boolean, onOpen: () -> Unit) {
+    val context = LocalContext.current
+    var apps by remember { mutableStateOf<List<AppUsage>?>(null) }
+    LaunchedEffect(isVisible) {
+        if (!isVisible) return@LaunchedEffect
+        val date = java.time.LocalDate.now().toString()
+        val cached = appCache.get(1)?.takeIf { it.date == date }
+        apps = cached?.records
+        if (cached == null || SystemClock.elapsedRealtime() - cached.loadedAt >= 60_000) {
+            try {
+                val result = loadApps(context, 1)
+                appCache.put(1, CachedApps(result, SystemClock.elapsedRealtime(), date, System.currentTimeMillis()))
+                apps = result
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { apps = cached?.records ?: emptyList() }
+        }
+    }
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Top apps today", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onOpen) { Text("View all") }
+            }
+            if (apps == null) LinearProgressIndicator(Modifier.fillMaxWidth())
+            else if (apps!!.isEmpty()) Text("No app usage available.", style = MaterialTheme.typography.bodySmall)
+            apps.orEmpty().take(3).forEach { app ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AppIcon(app, 34)
+                    Text(app.name, modifier = Modifier.weight(1f), maxLines = 2)
+                    Text(NetworkUtils.formatBytes(app.total), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
     }
 }

@@ -1,6 +1,8 @@
 package com.ayush.netpulse.ui.usage
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1023,72 +1025,128 @@ private fun chunkIntoWeeks(days: List<DayHeatmapCell>): List<List<DayHeatmapCell
 @Composable
 private fun UsageTrendCard(days: List<DayHeatmapCell>, filter: UsageFilterType) {
     val colors = LocalNetPulseColors.current
-    val missingColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-    val values = days.map { day ->
-        day.entity?.let { entity ->
-            when (filter) {
-                UsageFilterType.MOBILE -> entity.totalMobileBytes
-                UsageFilterType.WIFI -> entity.totalWifiBytes
-                UsageFilterType.TOTAL -> entity.totalAllBytes
-            }
+    val missing = MaterialTheme.colorScheme.outline.copy(alpha = .35f)
+    val grid = MaterialTheme.colorScheme.outline.copy(alpha = .15f)
+    val primary = MaterialTheme.colorScheme.primary
+    val values = remember(days, filter) { days.map { day -> day.entity?.let {
+        when (filter) {
+            UsageFilterType.MOBILE -> it.totalMobileBytes
+            UsageFilterType.WIFI -> it.totalWifiBytes
+            UsageFilterType.TOTAL -> it.totalAllBytes
         }
-    }
-    val peak = values.filterNotNull().maxOrNull()?.coerceAtLeast(1L) ?: 1L
-    val total = values.filterNotNull().sum()
-    val color = when (filter) {
-        UsageFilterType.MOBILE -> colors.upload
-        UsageFilterType.WIFI -> colors.download
-        UsageFilterType.TOTAL -> MaterialTheme.colorScheme.primary
-    }
-    Card(shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("${days.size} days · " + filter.label, style = MaterialTheme.typography.titleSmall)
-            Text(NetworkUtils.formatBytes(total), style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold)
-            Text("${values.count { it != null }} of ${days.size} days recorded", style = MaterialTheme.typography.labelSmall)
-            val recorded = values.filterNotNull()
-            if (recorded.isNotEmpty()) {
-                Text("Average per recorded day: " + NetworkUtils.formatBytes(total / recorded.size), style = MaterialTheme.typography.bodySmall)
-                Text("Highest recorded day: " + NetworkUtils.formatBytes(recorded.maxOrNull() ?: 0L), style = MaterialTheme.typography.bodySmall)
+    } } }
+    val recorded = values.filterNotNull()
+    val peak = (recorded.maxOrNull() ?: 0L).coerceAtLeast(1L)
+    val total = recorded.sum()
+    var selected by remember(days, filter) { mutableStateOf<Int?>(null) }
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("${days.size} days · ${filter.label}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (recorded.isEmpty()) "—" else NetworkUtils.formatBytes(total), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (filter != UsageFilterType.MOBILE) ChartLegend("Wi-Fi", colors.download)
+                if (filter != UsageFilterType.WIFI) ChartLegend("Mobile", colors.upload)
             }
-            if (values.isNotEmpty()) {
-                Canvas(Modifier.fillMaxWidth().height(100.dp)) {
-                    val slot = size.width / values.size
-                    values.forEachIndexed { i, value ->
-                        val h = if (value == null || value == 0L) 2.dp.toPx()
-                            else (size.height * (value.toDouble() / peak).toFloat()).coerceAtLeast(2.dp.toPx())
-                        drawRect(if (value == null) missingColor else color,
-                            topLeft = Offset(i * slot + slot * 0.15f, size.height - h),
-                            size = Size(slot * 0.7f, h))
+            if (days.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.height(156.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.End) {
+                        Text(NetworkUtils.formatBytes(peak), style = MaterialTheme.typography.labelSmall)
+                        Text(NetworkUtils.formatBytes(peak / 2), style = MaterialTheme.typography.labelSmall)
+                        Text("0", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Canvas(Modifier.weight(1f).height(156.dp)
+                        .pointerInput(days, filter) {
+                            detectTapGestures { position ->
+                                selected = (position.x / size.width * days.size).toInt().coerceIn(days.indices)
+                            }
+                        }) {
+                        val slot = size.width / days.size
+                        repeat(3) { n ->
+                            val y = size.height * n / 2f
+                            drawLine(grid, Offset(0f, y), Offset(size.width, y))
+                        }
+                        days.forEachIndexed { index, day ->
+                            val left = index * slot + slot * .14f
+                            val width = slot * .72f
+                            val entity = day.entity
+                            if (selected == index) drawRect(primary.copy(alpha = .10f), Offset(index * slot, 0f), Size(slot, size.height))
+                            if (entity == null) {
+                                drawRect(missing, Offset(left, size.height - 3.dp.toPx()), Size(width, 3.dp.toPx()))
+                            } else {
+                                val wifi = if (filter == UsageFilterType.MOBILE) 0L else entity.totalWifiBytes
+                                val mobile = if (filter == UsageFilterType.WIFI) 0L else entity.totalMobileBytes
+                                val wifiH = (wifi.toDouble() / peak * size.height).toFloat()
+                                val mobileH = (mobile.toDouble() / peak * size.height).toFloat()
+                                if (wifiH > 0) drawRect(colors.download, Offset(left, size.height - wifiH), Size(width, wifiH))
+                                if (mobileH > 0) drawRect(colors.upload, Offset(left, size.height - wifiH - mobileH), Size(width, mobileH))
+                                if (wifiH + mobileH == 0f) drawRect(primary, Offset(left, size.height - 2.dp.toPx()), Size(width, 2.dp.toPx()))
+                            }
+                        }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(days.first().displayDate, style = MaterialTheme.typography.labelSmall)
                     Text(days.last().displayDate, style = MaterialTheme.typography.labelSmall)
                 }
-                Text("Muted marks indicate missing records.", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                selected?.let { index ->
+                    val day = days.getOrNull(index)
+                    if (day != null) Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(12.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                            Text(day.displayDate, fontWeight = FontWeight.SemiBold)
+                            Text(values[index]?.let { NetworkUtils.formatBytes(it) } ?: "No record", style = MaterialTheme.typography.titleMedium)
+                            day.entity?.let { Text("Wi-Fi ${NetworkUtils.formatBytes(it.totalWifiBytes)} · Mobile ${NetworkUtils.formatBytes(it.totalMobileBytes)}", style = MaterialTheme.typography.labelSmall) }
+                        }
+                    }
+                } ?: Text("Tap a bar to inspect that day.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            HorizontalDivider()
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("Daily average", style = MaterialTheme.typography.labelSmall)
+                    Text(if (recorded.isEmpty()) "—" else NetworkUtils.formatBytes(total / recorded.size), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("Highest day", style = MaterialTheme.typography.labelSmall)
+                    Text(recorded.maxOrNull()?.let { NetworkUtils.formatBytes(it) } ?: "—", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+            Text("${recorded.size} of ${days.size} days recorded · Muted marks = missing records", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
+private fun ChartLegend(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(9.dp).clip(CircleShape).background(color))
+        Text(label, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun CustomUsageRangeDialog(min: String, max: String, currentStart: String, currentEnd: String,
     onDismiss: () -> Unit, onApply: (String, String) -> Unit) {
-    var start by remember { mutableStateOf(currentStart.ifEmpty { min }) }
-    var end by remember { mutableStateOf(currentEnd.ifEmpty { max }) }
-    fun validDate(value: String) = try { java.time.LocalDate.parse(value).toString() == value } catch (_: Exception) { false }
-    val valid = validDate(start) && validDate(end) && start >= min && end <= max && start <= end
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Custom usage range") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Choose dates within $min to $max (YYYY-MM-DD).")
-                androidx.compose.material3.OutlinedTextField(value = start, onValueChange = { start = it }, label = { Text("Start date") }, singleLine = true)
-                androidx.compose.material3.OutlinedTextField(value = end, onValueChange = { end = it }, label = { Text("End date") }, singleLine = true)
-                if (!valid) Text("Enter a valid range within recorded history.", color = MaterialTheme.colorScheme.error)
+    fun millis(value: String): Long? = try {
+        java.time.LocalDate.parse(value).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+    } catch (_: Exception) { null }
+    fun date(value: Long): String = java.time.Instant.ofEpochMilli(value).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+    val state = androidx.compose.material3.rememberDateRangePickerState(
+        initialSelectedStartDateMillis = millis(currentStart.ifEmpty { min }),
+        initialSelectedEndDateMillis = millis(currentEnd.ifEmpty { max }),
+        selectableDates = remember(min, max) {
+            object : androidx.compose.material3.SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    date(utcTimeMillis) in min..max
             }
-        }, confirmButton = { TextButton(enabled = valid, onClick = { onApply(start, end) }) { Text("Apply") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+        }
+    )
+    val start = state.selectedStartDateMillis?.let { date(it) }
+    val end = state.selectedEndDateMillis?.let { date(it) }
+    androidx.compose.material3.DatePickerDialog(onDismissRequest = onDismiss,
+        confirmButton = { TextButton(enabled = start != null && end != null && start >= min && end <= max && start <= end,
+            onClick = { if (start != null && end != null) onApply(start, end) }) { Text("Apply") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }) {
+        androidx.compose.material3.DateRangePicker(state = state, modifier = Modifier.height(420.dp))
+    }
 }
