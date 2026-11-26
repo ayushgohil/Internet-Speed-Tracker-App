@@ -354,8 +354,14 @@ class SpeedTrackerService : Service() {
         val wifiBytes = if (isSameDay) preferencesManager.cachedTodayWifiBytes else 0L
         val totalBytes = mobileBytes + wifiBytes
 
-        val speedTitle = "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
-        val usageSummary = if (hasUsagePermission) {
+        val speedTitle = when (preferencesManager.notificationStyle) {
+            "Download" -> "↓ ${speed.formattedDownload}"
+            "Usage" -> if (hasUsagePermission) "Today: ${NetworkUtils.formatBytes(mobileBytes + wifiBytes)}" else "Usage access required"
+            else -> "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
+        }
+        val usageSummary = if (preferencesManager.notificationStyle == "Download") {
+            "Connection: ${networkType.displayName}"
+        } else if (hasUsagePermission) {
             "Mobile: ${NetworkUtils.formatBytes(mobileBytes)}    Wi-Fi: ${NetworkUtils.formatBytes(wifiBytes)}"
         } else {
             "Connection: ${networkType.displayName}"
@@ -453,10 +459,16 @@ class SpeedTrackerService : Service() {
         val totalBytes = mobileBytes + wifiBytes
 
         // Row 1: ↓ 1.5 MB/s    ↑ 128 KB/s
-        val speedTitle = "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
+        val speedTitle = when (preferencesManager.notificationStyle) {
+            "Download" -> "↓ ${speed.formattedDownload}"
+            "Usage" -> if (hasUsagePermission) "Today: ${NetworkUtils.formatBytes(mobileBytes + wifiBytes)}" else "Usage access required"
+            else -> "↓ ${speed.formattedDownload}    ↑ ${speed.formattedUpload}"
+        }
 
         // Row 2: Mobile: 620 MB    Wi-Fi: 1.20 GB
-        val usageSummary = if (hasUsagePermission) {
+        val usageSummary = if (preferencesManager.notificationStyle == "Download") {
+            "Connection: ${networkType.displayName}"
+        } else if (hasUsagePermission) {
             "Mobile: ${NetworkUtils.formatBytes(mobileBytes)}    Wi-Fi: ${NetworkUtils.formatBytes(wifiBytes)}"
         } else {
             "Connection: ${networkType.displayName}"

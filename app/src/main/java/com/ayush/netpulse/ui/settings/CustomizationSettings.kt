@@ -26,6 +26,7 @@ internal fun CustomizationSettings() {
     var fontSize by remember { mutableStateOf(prefs.getInt("font_size", 12).coerceIn(10, 22).toFloat()) }
     var opacity by remember { mutableStateOf(prefs.getInt("opacity", 90).coerceIn(35, 100).toFloat()) }
     var downloadOnly by remember { mutableStateOf(prefs.getBoolean("download_only", false)) }
+    var order by remember { mutableStateOf(com.ayush.netpulse.util.DashboardOrder.parse(prefs.getString("dashboard_order", null))) }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -76,6 +77,25 @@ internal fun CustomizationSettings() {
                 Text("Quick actions")
                 Switch(quickActions, { quickActions = it; prefs.edit().putBoolean("quick_actions", it).apply() })
             }
+            HorizontalDivider()
+            Text("Optional card order", style = MaterialTheme.typography.titleMedium)
+            order.forEachIndexed { index, key ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(when (key) { "usage_insights" -> "Usage insights"; "network_details" -> "Network details"; else -> "Quick actions" }, modifier = Modifier.weight(1f))
+                    TextButton(enabled = index > 0, onClick = {
+                        order = com.ayush.netpulse.util.DashboardOrder.move(order, index, -1)
+                        prefs.edit().putString("dashboard_order", order.joinToString(",")).apply()
+                    }) { Text("Up") }
+                    TextButton(enabled = index < order.lastIndex, onClick = {
+                        order = com.ayush.netpulse.util.DashboardOrder.move(order, index, 1)
+                        prefs.edit().putString("dashboard_order", order.joinToString(",")).apply()
+                    }) { Text("Down") }
+                }
+            }
+            TextButton(onClick = {
+                order = com.ayush.netpulse.util.DashboardOrder.defaults
+                prefs.edit().remove("dashboard_order").apply()
+            }) { Text("Reset card order") }
         }
     }
 }
