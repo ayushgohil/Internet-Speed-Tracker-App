@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.TrafficStats
 import android.util.Log
+import android.os.SystemClock
 import com.ayush.netpulse.data.local.DailyUsageDao
 import com.ayush.netpulse.data.local.DailyUsageEntity
 import com.ayush.netpulse.data.local.SpeedRecordDao
@@ -50,6 +51,7 @@ class NetworkRepository(
         val currentRx = TrafficStats.getTotalRxBytes()
         val currentTx = TrafficStats.getTotalTxBytes()
         val currentTime = System.currentTimeMillis()
+        val elapsedNow = SystemClock.elapsedRealtime()
 
         if (currentRx == TrafficStats.UNSUPPORTED.toLong() || currentTx == TrafficStats.UNSUPPORTED.toLong()) {
             return LiveSpeed(0L, 0L, currentTime)
@@ -58,7 +60,7 @@ class NetworkRepository(
         if (lastRxBytes < 0 || lastTxBytes < 0 || lastTimestamp < 0) {
             lastRxBytes = currentRx
             lastTxBytes = currentTx
-            lastTimestamp = currentTime
+            lastTimestamp = elapsedNow
             return LiveSpeed(0L, 0L, currentTime)
         }
 
@@ -66,11 +68,11 @@ class NetworkRepository(
         if (currentRx < lastRxBytes || currentTx < lastTxBytes) {
             lastRxBytes = currentRx
             lastTxBytes = currentTx
-            lastTimestamp = currentTime
+            lastTimestamp = elapsedNow
             return LiveSpeed(0L, 0L, currentTime)
         }
 
-        val elapsedMillis = currentTime - lastTimestamp
+        val elapsedMillis = elapsedNow - lastTimestamp
         if (elapsedMillis <= 50) { // Discard micro-intervals (<50ms) to avoid division distortion
             return LiveSpeed(0L, 0L, currentTime)
         }
@@ -84,7 +86,7 @@ class NetworkRepository(
 
         lastRxBytes = currentRx
         lastTxBytes = currentTx
-        lastTimestamp = currentTime
+        lastTimestamp = elapsedNow
 
         return LiveSpeed(downBps, upBps, currentTime)
     }
@@ -271,6 +273,7 @@ class NetworkRepository(
             val todayStr = NetworkUtils.formatDateString(now)
             preferencesManager.lastReconciledDate = todayStr
             preferencesManager.lastReconciledTimestamp = now
+            if (maxLookbackDays >= 90) preferencesManager.lastFullReconciliationTimestamp = now
             preferencesManager.lastReconciliationStatus = "Success ($daysReconciled days updated at ${NetworkUtils.formatDateString(now)})"
 
             Result.success(daysReconciled)
@@ -302,9 +305,12 @@ class NetworkRepository(
         try {
             val now = System.currentTimeMillis()
             val timeSinceLastReconciliation = now - preferencesManager.lastReconciledTimestamp
-            // Reconcile multi-day history if requested, or if 15 minutes have elapsed since last check
-            if (forceReconcile || timeSinceLastReconciliation > 15 * 60 * 1000L) {
+            // Full recovery daily; refresh recent days more frequently for delayed OS statistics.
+            val fullAge = now - preferencesManager.lastFullReconciliationTimestamp
+            if (forceReconcile || fullAge < 0 || fullAge >= 24 * 60 * 60 * 1000L) {
                 reconcileMultiDayHistoricalUsage(maxLookbackDays = 90)
+            } else if (timeSinceLastReconciliation < 0 || timeSinceLastReconciliation >= 15 * 60 * 1000L) {
+                reconcileMultiDayHistoricalUsage(maxLookbackDays = 2)
             }
 
             val calendar = Calendar.getInstance().apply {

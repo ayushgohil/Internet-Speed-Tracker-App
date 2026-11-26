@@ -1,6 +1,7 @@
 package com.ayush.netpulse.ui.dashboard
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +46,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import com.ayush.netpulse.data.model.LiveSpeed
+import com.ayush.netpulse.util.NetworkUtils
+import java.time.LocalDate
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -86,7 +93,7 @@ fun DashboardTab(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
         // 1. UNIFIED LIVE NETWORK ACTIVITY HERO
         item(key = "live_speed_hero") {
@@ -95,7 +102,8 @@ fun DashboardTab(
                 uploadFormatted = uiState.liveSpeed.formattedUpload,
                 networkType = uiState.networkType,
                 isMonitoringRunning = uiState.isBackgroundServiceRunning,
-                onToggleMonitoring = onToggleBackgroundService
+                onToggleMonitoring = onToggleBackgroundService,
+                history = uiState.liveSpeedHistory
             )
         }
 
@@ -172,6 +180,30 @@ fun DashboardTab(
                 onRequestPermission = onRequestUsageAccess
             )
         }
+        if (uiState.hasUsageAccessPermission) {
+            item(key = "usage_summary") {
+                val month = LocalDate.now().toString().take(7)
+                val monthRecords = uiState.recentDailyRecords.filter { it.date.startsWith(month) }
+                val mobile = monthRecords.sumOf { it.totalMobileBytes }
+                val wifi = monthRecords.sumOf { it.totalWifiBytes }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryTile("Month to date", NetworkUtils.formatBytes(mobile + wifi),
+                        "${monthRecords.size} recorded days", onNavigateToUsage, Modifier.weight(1f))
+                    SummaryTile("Mobile plan",
+                        if (uiState.dataLimitBytes > 0) NetworkUtils.formatBytes(
+                            (uiState.dataLimitBytes - uiState.cycleMobileBytes).coerceAtLeast(0L))
+                        else "Not set",
+                        if (uiState.dataLimitBytes > 0) "Remaining this cycle" else "Set a data limit",
+                        onOpenSettings, Modifier.weight(1f))
+                }
+            }
+        }
+        item(key = "quick_actions") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryTile("Usage history", "90 days", "View trends", onNavigateToUsage, Modifier.weight(1f))
+                SummaryTile("Speed logs", "History", "Review samples", onNavigateToLogs, Modifier.weight(1f))
+            }
+        }
     }
 
     PullToRefreshContainer(
@@ -196,7 +228,8 @@ private fun LiveSpeedHeroCard(
     uploadFormatted: String,
     networkType: NetworkType,
     isMonitoringRunning: Boolean,
-    onToggleMonitoring: () -> Unit
+    onToggleMonitoring: () -> Unit,
+    history: List<LiveSpeed>
 ) {
     val npColors = LocalNetPulseColors.current
 
@@ -351,6 +384,9 @@ private fun LiveSpeedHeroCard(
             }
 
             Spacer(modifier = Modifier.height(14.dp))
+
+            LiveSpeedChart(history = history)
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Subdued metadata footer
             Text(
@@ -592,5 +628,59 @@ private fun TodayConsumptionCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SummaryTile(title: String, value: String, detail: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun LiveSpeedChart(history: List<LiveSpeed>) {
+    val colors = LocalNetPulseColors.current
+    val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+    val peak = history.maxOfOrNull { maxOf(it.downloadBytesPerSec, it.uploadBytesPerSec) } ?: 0L
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("Recent live samples", style = MaterialTheme.typography.labelMedium)
+        Text("Peak: " + NetworkUtils.formatSpeed(peak), style = MaterialTheme.typography.labelSmall)
+    }
+    Spacer(Modifier.height(8.dp))
+    if (history.size < 2) {
+        Text("Collecting speed samples…", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    Canvas(Modifier.fillMaxWidth().height(84.dp)) {
+        repeat(3) { i ->
+            val y = size.height * i / 2f
+            drawLine(grid, Offset(0f, y), Offset(size.width, y))
+        }
+        val end = history.last().timestamp
+        val start = end - 60_000L
+        val scale = peak.coerceAtLeast(1L).toDouble()
+        fun series(value: (LiveSpeed) -> Long, color: Color) {
+            val path = Path()
+            history.forEachIndexed { index, sample ->
+                val x = ((sample.timestamp - start) / 60_000f).coerceIn(0f, 1f) * size.width
+                val y = size.height * (1f - (value(sample) / scale).toFloat().coerceIn(0f, 1f))
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, color, style = Stroke(width = 2.dp.toPx()))
+        }
+        series({ it.downloadBytesPerSec }, colors.download)
+        series({ it.uploadBytesPerSec }, colors.upload)
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("60s ago", style = MaterialTheme.typography.labelSmall)
+        Text("Latest sample", style = MaterialTheme.typography.labelSmall)
     }
 }
