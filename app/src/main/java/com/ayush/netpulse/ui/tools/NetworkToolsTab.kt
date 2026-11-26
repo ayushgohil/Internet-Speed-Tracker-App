@@ -47,7 +47,12 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
     var progress by remember { mutableStateOf(0f) }
     var phase by remember { mutableStateOf("Ready") }
     var measured by remember { mutableStateOf(0.0) }
-    var speed by remember { mutableStateOf<String?>(null) }
+    var budgetName by rememberSaveable { mutableStateOf(NetworkTests.Budget.LOW.name) }
+    val budget = NetworkTests.Budget.valueOf(budgetName)
+    var downloadResult by remember { mutableStateOf<Double?>(null) }
+    var uploadResult by remember { mutableStateOf<Double?>(null) }
+    var pingResult by remember { mutableStateOf<NetworkTests.Latency?>(null) }
+    var transferred by remember { mutableStateOf(0L) }
     var latency by remember { mutableStateOf<String?>(null) }
     var dns by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -61,6 +66,14 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
         if (isVisible) ConnectionHistory.load(context) else job?.cancel()
     }
     LaunchedEffect(page) { job?.cancel(); error = null }
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) job?.cancel()
+        }
+        lifecycle.lifecycle.addObserver(observer)
+        onDispose { lifecycle.lifecycle.removeObserver(observer) }
+    }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(page) { listState.scrollToItem(0) }
     fun runTest(name: String, block: suspend () -> Unit) {
@@ -110,9 +123,14 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
             }
         }
         if (page == "speed") item {
-            SpeedGauge(phase, measured, progress, active == "Speed test")
-            ToolCard("Internet speed test", "Estimate transfer throughput using a bounded 5 MB download and 1 MB upload. Short tests may underestimate fast connections.",
-                speed, "Run test", active == null) { confirmSpeed = true }
+            NetPulseSpeedExperience(
+                phase = phase, measured = measured, progress = progress, running = active == "Speed test",
+                download = downloadResult, upload = uploadResult, latency = pingResult, bytes = transferred,
+                network = uiState.networkType.displayName, budget = budget, enabled = active == null,
+                connected = uiState.networkType != com.ayush.netpulse.data.model.NetworkType.DISCONNECTED,
+                onBudget = { budgetName = it.name }, onStart = { confirmSpeed = true },
+                onCancel = { job?.cancel() }, onHistory = { page = "tests" }
+            )
         }
         if (page == "latency") item {
             ToolCard("TCP latency", "Five TCP connection attempts to Cloudflare. Reports latency, variation and failed attempts; not ICMP ping.",
@@ -134,7 +152,7 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
                 }
             }
         }
-        if (active != null) item {
+        if (active != null && page != "speed") item {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Running $active…")
@@ -205,27 +223,47 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
     }
     if (confirmSpeed) AlertDialog(onDismissRequest = { confirmSpeed = false },
         title = { Text("Run internet speed test?") },
-        text = { Text("This contacts Cloudflare and transfers approximately 6 MB plus protocol overhead, including on mobile data.") },
+        text = { Text("NetPulse will contact Cloudflare for TCP latency and throughput. ${budget.label} uses up to ${budget.maxMb} MB of test payload plus connection overhead and may use your mobile allowance.") },
         confirmButton = { TextButton(onClick = {
             confirmSpeed = false
-            speed = null
+            downloadResult = null
+            uploadResult = null
+            pingResult = null
+            transferred = 0L
             progress = 0f
             measured = 0.0
             phase = "Connecting"
+            val selectedBudget = budget
             runTest("Speed test") {
                 val network = uiState.networkType.displayName
-                val result = NetworkTests.speed { step, value, fraction ->
+                val connectivity = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                val originalNetwork = connectivity.activeNetwork ?: error("No connection")
+                fun checkNetwork() {
+                    check(connectivity.activeNetwork == originalNetwork) { "Connection changed" }
+                }
+                val ping = NetworkTests.latency()
+                checkNetwork()
+                pingResult = ping
+                val result = NetworkTests.speed(selectedBudget) { sample ->
+                    checkNetwork()
                     androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
-                        phase = step
-                        measured = value
-                        progress = fraction
+                        if (sample.stage != phase && phase == "Download") {
+                            downloadResult = measured
+                            transferred = 0L
+                        }
+                        phase = sample.stage
+                        measured = sample.mbps
+                        progress = sample.fraction
+                        transferred = sample.bytes
                     }
                 }
-                phase = "Completed"
-                measured = result.downloadMbps
+                checkNetwork()
+                downloadResult = result.downloadMbps
+                uploadResult = result.uploadMbps
+                transferred = result.bytes
                 progress = 1f
+                phase = "Completed"
                 testHistory = SpeedTestHistory.add(context, SpeedTestHistory.Entry(System.currentTimeMillis(), result.downloadMbps, result.uploadMbps, network))
-                speed = "Download: ${format(result.downloadMbps)} Mbps\nUpload: ${format(result.uploadMbps)} Mbps"
             }
         }) { Text("Start") } }, dismissButton = { TextButton(onClick = { confirmSpeed = false }) { Text("Cancel") } })
     if (confirmClearTests) AlertDialog(onDismissRequest = { confirmClearTests = false },
@@ -277,63 +315,3 @@ private fun ToolGrid(destinations: List<ToolDestination>, onSelect: (String) -> 
     }
 }
 
-@Composable
-private fun SpeedGauge(phase: String, measured: Double, progress: Float, running: Boolean) {
-    val colors = com.ayush.netpulse.ui.theme.LocalNetPulseColors.current
-    val accent = if (phase == "Upload") colors.upload else colors.download
-    val track = MaterialTheme.colorScheme.outline.copy(alpha = .18f)
-    val ink = MaterialTheme.colorScheme.onSurfaceVariant
-    val displayed by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = measured.coerceAtLeast(0.0).toFloat(), animationSpec = androidx.compose.animation.core.tween(450), label = "measuredSpeed")
-    val fraction by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = gaugeFraction(measured), animationSpec = androidx.compose.animation.core.tween(450), label = "needle")
-    val transfer by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = progress.coerceIn(0f, 1f), animationSpec = androidx.compose.animation.core.tween(300), label = "transfer")
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("THROUGHPUT", style = MaterialTheme.typography.labelMedium)
-                Text(phase.uppercase(Locale.US), color = accent, style = MaterialTheme.typography.labelMedium)
-            }
-            Box(Modifier.fillMaxWidth().aspectRatio(1.15f), contentAlignment = Alignment.Center) {
-                androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                    val center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height * .53f)
-                    val radius = minOf(size.width, size.height) * .43f
-                    val origin = androidx.compose.ui.geometry.Offset(center.x - radius, center.y - radius)
-                    val bounds = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
-                    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                    drawArc(track, 135f, 270f, false, origin, bounds, style = stroke)
-                    if (fraction > 0) drawArc(accent, 135f, 270f * fraction, false, origin, bounds, style = stroke)
-                    fun point(degrees: Float, r: Float): androidx.compose.ui.geometry.Offset {
-                        val angle = Math.toRadians(degrees.toDouble())
-                        return center + androidx.compose.ui.geometry.Offset((kotlin.math.cos(angle) * r).toFloat(), (kotlin.math.sin(angle) * r).toFloat())
-                    }
-                    for (tick in 0..40) {
-                        val angle = 135f + 270f * tick / 40
-                        drawLine(if (tick % 5 == 0) ink else track, point(angle, radius * .83f), point(angle, radius * if (tick % 5 == 0) .72f else .78f), if (tick % 5 == 0) 2.dp.toPx() else 1.dp.toPx())
-                    }
-                    val angle = 135f + 270f * fraction
-                    drawLine(accent.copy(alpha = .16f), point(angle, radius * .52f), point(angle, radius * .94f), 10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                    drawLine(accent, point(angle, radius * .60f), point(angle, radius * .95f), 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (running) phase else if (phase == "Completed") "Download result" else phase, style = MaterialTheme.typography.labelLarge)
-                    Text(String.format(Locale.US, "%.1f", displayed), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = accent)
-                    Text("Mbps", style = MaterialTheme.typography.titleSmall)
-                }
-                Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(.75f), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("0", style = MaterialTheme.typography.labelSmall)
-                    Text("Log scale", style = MaterialTheme.typography.labelSmall)
-                    Text("1000+", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-            if (running) {
-                LinearProgressIndicator(progress = { if (phase == "Upload") .5f + transfer * .5f else transfer * .5f }, modifier = Modifier.fillMaxWidth(), color = accent)
-                Text("Measured transfer · ${(transfer * 100).toInt()}% of stage", style = MaterialTheme.typography.labelSmall)
-            } else Text("Short transfer estimate · about 6 MB", style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
-internal fun gaugeFraction(mbps: Double): Float =
-    (kotlin.math.ln1p(mbps.coerceAtLeast(0.0)) / kotlin.math.ln1p(1000.0)).toFloat().coerceIn(0f, 1f)
