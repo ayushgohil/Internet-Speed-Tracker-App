@@ -111,6 +111,14 @@ class PreferencesManager(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_SHOW_ON_LOCK_SCREEN, value).apply()
 
     /** Monthly mobile data limit in bytes; 0 means no limit / alerts off. */
+    var dailyDataLimitBytes: Long
+        get() = prefs.getLong("key_daily_data_limit_bytes", 0L)
+        set(value) = prefs.edit().putLong("key_daily_data_limit_bytes", value).apply()
+
+    var dailyDataLimitAlertState: String
+        get() = prefs.getString("key_daily_data_limit_alert_state", "") ?: ""
+        set(value) = prefs.edit().putString("key_daily_data_limit_alert_state", value).apply()
+
     var dataLimitBytes: Long
         get() = prefs.getLong(KEY_DATA_LIMIT_BYTES, 0L)
         set(value) = prefs.edit().putLong(KEY_DATA_LIMIT_BYTES, value).apply()

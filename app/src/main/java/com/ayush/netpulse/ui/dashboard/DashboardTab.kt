@@ -67,6 +67,7 @@ fun DashboardTab(
     onToggleBackgroundService: () -> Unit,
     onNavigateToUsage: () -> Unit,
     onNavigateToLogs: () -> Unit,
+    onNavigateToApps: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onRequestUsageAccess: () -> Unit = {},
     onRequestBatteryOptimization: () -> Unit = {},
@@ -197,6 +198,20 @@ fun DashboardTab(
                         onOpenSettings, Modifier.weight(1f))
                 }
             }
+        }
+        if (uiState.hasUsageAccessPermission) {
+            item(key = "daily_plan") {
+                val limit = uiState.dailyDataLimitBytes
+                val remaining = (limit - uiState.dailyUsage.totalMobileBytes).coerceAtLeast(0L)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryTile("Daily allowance", if (limit > 0) NetworkUtils.formatBytes(remaining) else "Not set",
+                        if (limit > 0) "Remaining today" else "Configure in settings", onOpenSettings, Modifier.weight(1f))
+                    SummaryTile("App usage", "By app", "See top consumers", onNavigateToApps, Modifier.weight(1f))
+                }
+            }
+        }
+        item(key = "network_details") {
+            com.ayush.netpulse.ui.dashboard.NetworkDetailsCard(uiState.networkType)
         }
         item(key = "quick_actions") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

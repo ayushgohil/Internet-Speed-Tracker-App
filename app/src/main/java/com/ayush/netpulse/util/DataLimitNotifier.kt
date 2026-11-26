@@ -38,7 +38,22 @@ object DataLimitNotifier {
         post(context, level, used, limit, percent)
     }
 
-    private fun post(context: Context, level: Int, used: Long, limit: Long, percent: Int) {
+    @Synchronized
+    fun checkDaily(context: Context, prefs: PreferencesManager, used: Long, now: Long) {
+        val limit = prefs.dailyDataLimitBytes
+        if (limit <= 0L) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val day = NetworkUtils.formatDateString(now)
+        val state = prefs.dailyDataLimitAlertState.split(":")
+        val previous = if (state.firstOrNull() == day) state.getOrNull(1)?.toIntOrNull() ?: 0 else 0
+        val percent = DataLimit.percentUsed(used, limit)
+        val level = DataLimit.levelToNotify(percent, previous) ?: return
+        post(context, level, used, limit, percent, daily = true)
+        prefs.dailyDataLimitAlertState = "$day:$level"
+    }
+
+    private fun post(context: Context, level: Int, used: Long, limit: Long, percent: Int, daily: Boolean = false) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -48,13 +63,14 @@ object DataLimitNotifier {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "Data limit alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "Warns when your monthly mobile data limit is nearly used or reached"
+                    description = "Warns when your daily or monthly mobile data limit is nearly used or reached"
                 }
             )
         }
 
-        val title = if (level >= DataLimit.LIMIT_PERCENT) "Data limit reached" else "$percent% of your data used"
-        val text = "${NetworkUtils.formatBytes(used)} of ${NetworkUtils.formatBytes(limit)} mobile data this cycle"
+        val period = if (daily) "daily" else "monthly"
+        val title = if (level >= DataLimit.LIMIT_PERCENT) "$period data limit reached" else "$percent% of $period data used"
+        val text = "${NetworkUtils.formatBytes(used)} of ${NetworkUtils.formatBytes(limit)} mobile data ${if (daily) "today" else "this cycle"}"
 
         val open = PendingIntent.getActivity(
             context, 2001, Intent(context, MainActivity::class.java),
@@ -69,7 +85,7 @@ object DataLimitNotifier {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         try {
-            manager.notify(NOTIFICATION_ID, notification)
+            manager.notify(if (daily) 2002 else NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {
         }
     }

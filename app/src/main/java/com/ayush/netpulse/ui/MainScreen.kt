@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ayush.netpulse.ui.apps.AppUsageTab
 import com.ayush.netpulse.ui.dashboard.DashboardTab
 import com.ayush.netpulse.ui.dashboard.DashboardUiState
 import com.ayush.netpulse.ui.navigation.NavScreen
@@ -72,6 +73,7 @@ fun MainScreen(
     onToggleSpeedInStatusBar: () -> Unit = {},
     onToggleShowOnLockScreen: () -> Unit = {},
     onSetDataLimitGb: (Double) -> Unit = {},
+    onSetDailyDataLimitGb: (Double) -> Unit = {},
     onSetDataLimitCycleDay: (Int) -> Unit = {},
     onSetSpeedUnit: (String) -> Unit = {},
     onSetNotificationStyle: (String) -> Unit = {},
@@ -117,6 +119,7 @@ fun MainScreen(
             onToggleSpeedInStatusBar = onToggleSpeedInStatusBar,
             onToggleShowOnLockScreen = onToggleShowOnLockScreen,
             onSetDataLimitGb = onSetDataLimitGb,
+            onSetDailyDataLimitGb = onSetDailyDataLimitGb,
             onSetDataLimitCycleDay = onSetDataLimitCycleDay,
             onSetSpeedUnit = onSetSpeedUnit,
             onSetNotificationStyle = onSetNotificationStyle,
@@ -260,6 +263,7 @@ fun MainScreen(
                                     pagerState.animateScrollToPage(NavScreen.USAGE.ordinal)
                                 }
                             },
+                            onNavigateToApps = { coroutineScope.launch { pagerState.animateScrollToPage(NavScreen.APPS.ordinal) } },
                             onNavigateToLogs = {
                                 openSettingsDirectlyToLogs = true
                                 isSettingsOpen = true
@@ -272,6 +276,10 @@ fun MainScreen(
                             onRequestBatteryOptimization = onRequestBatteryOptimization,
                             onRefresh = onRefreshUsage
                         )
+                    }
+                    NavScreen.APPS -> {
+                        AppUsageTab(uiState.hasUsageAccessPermission, onRequestUsageAccess,
+                            isVisible = pagerState.currentPage == NavScreen.APPS.ordinal)
                     }
                     NavScreen.USAGE -> {
                         UsageTab(

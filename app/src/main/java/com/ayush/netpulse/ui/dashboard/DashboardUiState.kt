@@ -25,6 +25,7 @@ data class DashboardUiState(
     val showSpeedInStatusBar: Boolean = false,
     val showOnLockScreen: Boolean = false,
     val dataLimitBytes: Long = 0L,
+    val dailyDataLimitBytes: Long = 0L,
     val dataLimitCycleDay: Int = 1,
     val cycleMobileBytes: Long = 0L,
     val speedUnitPreference: String = "Auto",
