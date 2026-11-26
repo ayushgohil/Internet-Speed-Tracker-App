@@ -113,6 +113,9 @@ fun NetworkToolsTab(uiState: DashboardUiState, isVisible: Boolean, onOpenSetting
                 }
             }
         }
+        item { WifiAnalyzerCard() }
+        item { CellularDetailsCard() }
+        item { DataExportCard(uiState, events, testHistory) }
         item { NetworkDetailsCard(uiState.networkType) }
         item {
             Card(Modifier.fillMaxWidth()) {

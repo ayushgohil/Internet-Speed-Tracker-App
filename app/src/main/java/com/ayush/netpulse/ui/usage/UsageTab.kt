@@ -124,6 +124,7 @@ fun UsageTab(
     lazyListState: LazyListState = rememberLazyListState()
 ) {
     var selectedFilter by remember { mutableStateOf(UsageFilterType.TOTAL) }
+    var trendDays by rememberSaveable { mutableStateOf(30) }
     var selectedDayDetail by remember { mutableStateOf<DayHeatmapCell?>(null) }
 
     // Precompute 90-day sequence only when DB records change
@@ -316,7 +317,15 @@ fun UsageTab(
         }
 
         item(key = "usage_trend") {
-            UsageTrendCard(daysList.takeLast(30), selectedFilter)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(7, 30, 90).forEach { days ->
+                        FilterChip(selected = trendDays == days, onClick = { trendDays = days },
+                            label = { Text("$days days") })
+                    }
+                }
+                UsageTrendCard(daysList.takeLast(trendDays), selectedFilter)
+            }
         }
 
         // 3. Compact Dynamic Activity Heatmap Card
@@ -1023,10 +1032,15 @@ private fun UsageTrendCard(days: List<DayHeatmapCell>, filter: UsageFilterType) 
     Card(shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Last 30 days · " + filter.label, style = MaterialTheme.typography.titleSmall)
+            Text("Last ${days.size} days · " + filter.label, style = MaterialTheme.typography.titleSmall)
             Text(NetworkUtils.formatBytes(total), style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold)
             Text("${values.count { it != null }} of ${days.size} days recorded", style = MaterialTheme.typography.labelSmall)
+            val recorded = values.filterNotNull()
+            if (recorded.isNotEmpty()) {
+                Text("Average per recorded day: " + NetworkUtils.formatBytes(total / recorded.size), style = MaterialTheme.typography.bodySmall)
+                Text("Highest recorded day: " + NetworkUtils.formatBytes(recorded.maxOrNull() ?: 0L), style = MaterialTheme.typography.bodySmall)
+            }
             if (values.isNotEmpty()) {
                 Canvas(Modifier.fillMaxWidth().height(100.dp)) {
                     val slot = size.width / values.size
