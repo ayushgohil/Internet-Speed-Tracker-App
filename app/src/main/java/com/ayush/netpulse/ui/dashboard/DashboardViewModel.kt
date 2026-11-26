@@ -83,6 +83,7 @@ class DashboardViewModel(
         // Observe speed from authoritative liveSpeedState (piped through SpeedSmoother)
         viewModelScope.launch {
             SpeedTrackerService.liveSpeedState.collect { rawSpeed ->
+                if (!SpeedTrackerService.isServiceRunningState.value) return@collect
                 val netType = _uiState.value.networkType
                 val smoothed = speedSmoother.smooth(rawSpeed, netType)
                 _uiState.update { state ->
@@ -203,8 +204,12 @@ class DashboardViewModel(
 
     private var autoRefreshJob: kotlinx.coroutines.Job? = null
 
+    private var usageLoadJob: Job? = null
+
     fun loadDailyDataUsage(forceReconcile: Boolean = false, isSilent: Boolean = false) {
-        viewModelScope.launch {
+        if (usageLoadJob?.isActive == true && !forceReconcile) return
+        usageLoadJob?.cancel()
+        usageLoadJob = viewModelScope.launch {
             if (!isSilent) {
                 _uiState.update { it.copy(isLoadingUsage = true, usageErrorMessage = null) }
             }

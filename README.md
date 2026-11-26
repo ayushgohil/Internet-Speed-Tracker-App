@@ -10,8 +10,8 @@ A fast, private, offline-first Android app that shows your real-time download an
 ![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)
-![Version](https://img.shields.io/badge/Version-1.0.0-blue)
-![Privacy](https://img.shields.io/badge/Privacy-100%25%20local%20%26%20offline-success)
+![Version](https://img.shields.io/badge/Version-1.1-blue)
+![Privacy](https://img.shields.io/badge/Privacy-local--first-success)
 
 [Features](#-features) · [Screenshots](#-screenshots) · [How it works](#-how-it-works) · [Get the APK](#-get-the-apk) · [Build from source](#-build-from-source) · [Troubleshooting](#-troubleshooting)
 
@@ -47,7 +47,7 @@ NetPulse is a lightweight network monitor built with **Kotlin** and **Jetpack Co
 1. **"How fast is my connection right now?"** A live download and upload speed, always visible in the status bar and the notification shade, even when the app is closed.
 2. **"How much data have I used?"** Daily Wi-Fi and mobile totals for today, plus a 90-day activity heatmap and a day-by-day table.
 
-Everything is computed on your device. There is no account, no server, and no analytics (see [Privacy](#-privacy)).
+Passive monitoring is computed on your device. No account or analytics is required; optional network tests contact Cloudflare (see [Privacy](#-privacy)).
 
 ---
 
@@ -55,8 +55,10 @@ Everything is computed on your device. There is no account, no server, and no an
 
 ### ⚡ Live speed, everywhere you look
 - **Status bar speed icon:** an optional icon that shows your current download speed as a large two-row number (`84` over `KB/s`), drawn with a condensed bold font so it stays readable at status bar size.
-- **Ongoing notification** with live download ↑ and upload ↓ speed and today's mobile and Wi-Fi usage.
+- **Ongoing notification** with live download ↓ and upload ↑ speed and today's mobile and Wi-Fi usage.
   - **Minimal:** a compact two-line view.
+  - **Download only:** download speed and connection.
+  - **Usage first:** daily data usage in the notification title.
   - **Detailed:** an expanded card with today's mobile, Wi-Fi and total usage, the connection type, and a **Stop** action.
 - **Choose your units:** Automatic (adaptive), always KB/s, or always MB/s.
 - **Refresh rate:** 1 second (interactive) or 2.5 seconds (battery saver).
@@ -67,6 +69,14 @@ Everything is computed on your device. There is no account, no server, and no an
 - **Tap any day** for a detailed breakdown of mobile, Wi-Fi and the combined total.
 - **Daily table** with date, mobile, Wi-Fi and total columns, plus a sticky 90-day summary bar.
 - **History reconciliation:** re-syncs the past 90 days from Android's own network statistics, and never overwrites a larger known value with a temporary zero.
+
+### Apps, tools and customization
+- Per-app UID-based usage, search and network/date filters; Android can group or hide app identities.
+- Daily and monthly mobile allowances, threshold alerts, live graph, customizable dashboard, screen-state estimates and usage projections.
+- User-triggered Cloudflare throughput, TCP latency and DNS tests; local speed-test and connection history.
+- Wi-Fi channel analysis, cellular subscription details, DNS-SD service discovery, Quick Settings tile and draggable speed overlay.
+- CSV and JSON export; versioned daily usage backup and non-destructive restore. Backups do not include all app settings or logs.
+- Usage charts support 7/30/90-day presets and custom ranges.
 
 ### 🧾 Speed logs
 - Raw speed samples are stored locally so you can review them later.
@@ -87,7 +97,7 @@ Everything is computed on your device. There is no account, no server, and no an
 
 ## 📸 Screenshots
 
-Real screenshots from a Moto G54 5G running Android 15, in both themes. **Overview** shows the live speed and today's usage, **Usage** has the 90-day heatmap and daily table, and **Settings** holds everything else (including Speed Logs and Diagnostics).
+Earlier-version screenshots from a Moto G54 5G running Android 15, in both themes. **Overview** shows the live speed and today's usage, **Usage** has the 90-day heatmap and daily table, and **Settings** holds everything else (including Speed Logs and Diagnostics).
 
 ### Dark theme
 
@@ -229,7 +239,10 @@ Keeping a monitor running all night is the hardest part of an app like this, bec
 | `RECEIVE_BOOT_COMPLETED` | Resume tracking after a reboot or app update. |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Let you exempt NetPulse from battery optimization so it survives long idle periods. |
 | `SCHEDULE_EXACT_ALARM` | Schedule precise restart alarms when Android allows it. |
-| `INTERNET` | Declared, but NetPulse makes no network requests (see [Privacy](#-privacy)). |
+| `INTERNET` | User-triggered throughput, TCP latency and DNS tests, and local service discovery. |
+| `ACCESS_WIFI_STATE`, `CHANGE_WIFI_STATE`, location permissions | User-triggered nearby Wi-Fi analysis; Android may require precise location and enabled location services. |
+| `READ_PHONE_STATE` | Optional cellular subscription diagnostics. |
+| `SYSTEM_ALERT_WINDOW` | Optional floating speed overlay, enabled by the user. |
 
 ---
 
@@ -256,7 +269,7 @@ Keeping a monitor running all night is the hardest part of an app like this, bec
 ├── .github/workflows/build-apk.yml     # Builds the APKs on every push and publishes the latest release
 ├── docs/screenshots/                   # Screenshots shown in this README
 ├── app/
-│   ├── debug.keystore                  # Shared DEBUG signing key (debug builds only)
+│   ├── debug.keystore                  # Shared test signing key (not for public distribution)
 │   ├── build.gradle.kts
 │   └── src/
 │       ├── main/
@@ -409,10 +422,11 @@ The installed copy was signed with a different key (for example, an older build)
 
 ## 🔒 Privacy
 
-NetPulse is designed to be **100% local and offline**:
+NetPulse is designed to be **local-first**:
 
 - All speed samples and usage statistics are processed and stored **on your device** only.
-- The app includes **no networking, analytics or crash-reporting libraries**, and it makes no network requests of its own. The `INTERNET` permission is declared but unused for data transfer.
+- Passive monitoring does not send telemetry. Optional throughput, TCP latency and DNS tests contact `speed.cloudflare.com`; a completed throughput test transfers about 6 MB plus overhead. Cloudflare and network operators may observe connection metadata. Local DNS-SD discovery sends local network queries when requested.
+- Nearby Wi-Fi and cellular information is accessed only for the corresponding optional tools. Exports and backups are written to the user-selected destination; these files may contain private usage history.
 - There are no accounts, no tracking, and no telemetry servers.
 
 Speed is measured from Android's device-wide byte counters, which count all apps together. NetPulse never inspects the content of your traffic.
